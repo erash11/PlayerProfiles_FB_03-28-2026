@@ -1,0 +1,13 @@
+# Python
+__pycache__/
+*.pyc
+*.pyo
+venv/
+.env
+
+# Generated reports
+
+
+# Data files (source databases live in separate pipeline repos)
+data/*.duckdb
+data/raw/

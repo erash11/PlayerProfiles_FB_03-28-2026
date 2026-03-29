@@ -1,0 +1,459 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>{{ label }} — Football Performance Report</title>
+<script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
+<style>
+  *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+  body {
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+    background: #0f1117;
+    color: #e2e8f0;
+    font-size: 14px;
+    line-height: 1.5;
+  }
+
+  /* ── Layout ── */
+  .page { max-width: 1200px; margin: 0 auto; padding: 24px 16px; }
+
+  /* ── Header ── */
+  .header { margin-bottom: 24px; }
+  .header h1 { font-size: 22px; font-weight: 700; color: #f8fafc; letter-spacing: -0.3px; }
+  .header-meta { display: flex; gap: 20px; margin-top: 6px; flex-wrap: wrap; }
+  .header-meta span { font-size: 12px; color: #94a3b8; }
+  .header-meta strong { color: #cbd5e1; }
+
+  /* ── Data source pills ── */
+  .source-pills { display: flex; gap: 8px; margin-top: 10px; flex-wrap: wrap; }
+  .pill {
+    font-size: 11px; padding: 2px 8px; border-radius: 999px; font-weight: 600;
+    background: #1e293b; border: 1px solid #334155; color: #94a3b8;
+  }
+  .pill.ok { border-color: #22c55e; color: #4ade80; background: #052e16; }
+
+  /* ── Filters ── */
+  .filters {
+    display: flex; gap: 10px; margin-bottom: 16px; flex-wrap: wrap; align-items: center;
+  }
+  .filters select, .filters input {
+    background: #1e293b; border: 1px solid #334155; color: #e2e8f0;
+    padding: 6px 10px; border-radius: 6px; font-size: 13px; outline: none;
+  }
+  .filters select:focus, .filters input:focus { border-color: #6366f1; }
+  .filters input { min-width: 180px; }
+  .filter-label { font-size: 12px; color: #64748b; white-space: nowrap; }
+
+  /* ── Table ── */
+  .table-wrap { overflow-x: auto; border-radius: 10px; border: 1px solid #1e293b; }
+  table { width: 100%; border-collapse: collapse; }
+  thead { background: #1e293b; }
+  thead th {
+    padding: 10px 12px; text-align: left; font-size: 11px; font-weight: 600;
+    color: #64748b; text-transform: uppercase; letter-spacing: 0.6px;
+    cursor: pointer; white-space: nowrap; user-select: none;
+  }
+  thead th:hover { color: #94a3b8; }
+  thead th.sorted { color: #818cf8; }
+  thead th.sorted::after { content: " ↑"; }
+  thead th.sorted.desc::after { content: " ↓"; }
+
+  tbody tr { border-top: 1px solid #1e293b; cursor: pointer; transition: background 0.1s; }
+  tbody tr:hover { background: #1a2332; }
+  tbody tr.expanded { background: #1a2332; }
+  td { padding: 9px 12px; vertical-align: middle; }
+
+  .rank-cell { color: #475569; font-size: 12px; font-weight: 600; width: 40px; }
+  .name-cell { font-weight: 600; color: #f1f5f9; }
+  .name-cell .jersey { color: #475569; font-size: 12px; margin-left: 4px; }
+  .pos-cell { color: #94a3b8; font-size: 12px; }
+  .score-cell { font-weight: 700; font-size: 15px; color: #f8fafc; }
+  .domain-cell { color: #cbd5e1; font-size: 13px; }
+  .domain-cell.missing { color: #475569; font-style: italic; font-size: 11px; }
+
+  /* ── RAG ── */
+  .rag { display: inline-block; width: 10px; height: 10px; border-radius: 50%; }
+  .rag.green  { background: #22c55e; box-shadow: 0 0 6px #22c55e88; }
+  .rag.amber  { background: #f59e0b; box-shadow: 0 0 6px #f59e0b88; }
+  .rag.red    { background: #ef4444; box-shadow: 0 0 6px #ef444488; }
+  .rag-cell { text-align: center; }
+
+  /* ── Expand panel ── */
+  .profile-row { display: none; }
+  .profile-row.open { display: table-row; }
+  .profile-panel {
+    padding: 20px; background: #12192a;
+    border-top: 2px solid #6366f1;
+  }
+  .profile-header {
+    display: flex; align-items: baseline; gap: 12px; margin-bottom: 16px; flex-wrap: wrap;
+  }
+  .profile-name { font-size: 18px; font-weight: 700; color: #f8fafc; }
+  .profile-pos  { font-size: 13px; color: #64748b; }
+  .profile-tsa  { font-size: 22px; font-weight: 800; color: #818cf8; margin-left: auto; }
+  .profile-rag-label {
+    font-size: 11px; font-weight: 600; padding: 3px 10px; border-radius: 999px;
+    text-transform: uppercase; letter-spacing: 0.5px;
+  }
+  .profile-rag-label.green { background: #052e16; color: #4ade80; border: 1px solid #22c55e; }
+  .profile-rag-label.amber { background: #1c1407; color: #fbbf24; border: 1px solid #f59e0b; }
+  .profile-rag-label.red   { background: #1c0707; color: #f87171; border: 1px solid #ef4444; }
+
+  .profile-body { display: grid; grid-template-columns: 300px 1fr; gap: 24px; align-items: start; }
+  @media (max-width: 700px) { .profile-body { grid-template-columns: 1fr; } }
+
+  /* ── Spider chart ── */
+  .chart-wrap { position: relative; width: 280px; height: 280px; }
+
+  /* ── Metrics table ── */
+  .metrics-section h4 {
+    font-size: 11px; font-weight: 700; color: #475569; text-transform: uppercase;
+    letter-spacing: 0.6px; margin-bottom: 6px; margin-top: 14px;
+  }
+  .metrics-section h4:first-child { margin-top: 0; }
+  .metrics-tbl { width: 100%; border-collapse: collapse; font-size: 12px; }
+  .metrics-tbl th {
+    color: #475569; text-align: right; padding: 3px 8px;
+    font-size: 10px; text-transform: uppercase; letter-spacing: 0.5px;
+  }
+  .metrics-tbl th:first-child { text-align: left; }
+  .metrics-tbl td { padding: 4px 8px; text-align: right; border-top: 1px solid #1e293b; }
+  .metrics-tbl td:first-child { text-align: left; color: #94a3b8; }
+  .t-pos { background: #0a1f10; color: #4ade80; border-radius: 3px; }
+  .t-neg { background: #1f0a0a; color: #f87171; border-radius: 3px; }
+  .t-neu { color: #cbd5e1; }
+  .val-na { color: #334155; font-style: italic; }
+
+  .missing-note {
+    font-size: 11px; color: #475569; margin-top: 12px; font-style: italic;
+  }
+</style>
+</head>
+<body>
+<div class="page">
+
+  <!-- Header -->
+  <div class="header">
+    <h1>Football Player Performance Report</h1>
+    <div class="header-meta">
+      <span><strong>{{ label }}</strong></span>
+      <span>Period: <strong>{{ start_date }}</strong> → <strong>{{ end_date }}</strong></span>
+      <span>Generated: <strong>{{ generated_at }}</strong></span>
+      <span>Athletes: <strong>{{ athletes|length }}</strong></span>
+    </div>
+    <div class="source-pills">
+      <span class="pill ok">CMJ {{ cmj_count }} athletes</span>
+      <span class="pill {% if gps_count > 0 %}ok{% endif %}">GPS {{ gps_count }} athletes</span>
+      <span class="pill {% if bw_count > 0 %}ok{% endif %}">BW {{ bw_count }} athletes</span>
+    </div>
+  </div>
+
+  <!-- Filters -->
+  <div class="filters">
+    <span class="filter-label">Filter:</span>
+    <select id="posFilter" onchange="applyFilters()">
+      <option value="">All Positions</option>
+      {% for pos in positions %}
+      <option value="{{ pos }}">{{ pos }}</option>
+      {% endfor %}
+    </select>
+    <select id="ragFilter" onchange="applyFilters()">
+      <option value="">All RAG</option>
+      <option value="green">Green</option>
+      <option value="amber">Amber</option>
+      <option value="red">Red</option>
+    </select>
+    <input id="nameSearch" type="text" placeholder="Search name…" oninput="applyFilters()">
+  </div>
+
+  <!-- Table -->
+  <div class="table-wrap">
+    <table id="rosterTable">
+      <thead>
+        <tr>
+          <th onclick="sortTable('tsa_rank')" id="th-tsa_rank" class="sorted">#</th>
+          <th onclick="sortTable('full_name')" id="th-full_name">Athlete</th>
+          <th onclick="sortTable('position')" id="th-position">Pos</th>
+          <th onclick="sortTable('tsa_score')" id="th-tsa_score">TSA</th>
+          <th onclick="sortTable('cmj_domain')" id="th-cmj_domain">CMJ</th>
+          <th onclick="sortTable('gps_domain')" id="th-gps_domain">GPS</th>
+          <th onclick="sortTable('bw_domain')" id="th-bw_domain">BW</th>
+          <th>RAG</th>
+        </tr>
+      </thead>
+      <tbody id="tableBody"></tbody>
+    </table>
+  </div>
+
+  <p id="noResults" style="display:none; color:#475569; padding:20px; text-align:center;">
+    No athletes match the current filters.
+  </p>
+
+</div><!-- /page -->
+
+<script>
+const ATHLETES = {{ athletes_json }};
+
+const TEAM_AVG = {
+  jump_height_cm:      {{ team_avg.jump_height_cm | round(2) }},
+  peak_power_bm:       {{ team_avg.peak_power_bm | round(2) }},
+  mrsi:                {{ team_avg.mrsi | round(3) }},
+  avg_hsd_m:           {{ team_avg.avg_hsd_m | round(1) }},
+  avg_player_load:     {{ team_avg.avg_player_load | round(1) }},
+  avg_max_velocity_ms: {{ team_avg.avg_max_velocity_ms | round(2) }},
+  weight_kg:           {{ team_avg.weight_kg | round(1) }},
+};
+
+const SPIDER_LABELS = [
+  "Jump Height", "Peak Power/BM", "mRSI",
+  "High Speed Dist", "Player Load", "Max Velocity", "Body Weight"
+];
+const SPIDER_T_KEYS = [
+  "jump_height_t","peak_power_bm_t","mrsi_t",
+  "hsd_t","player_load_t","max_vel_t","weight_t"
+];
+
+// ── Sort state ──
+let sortCol = "tsa_rank";
+let sortDesc = false;
+let activeCharts = {};
+
+function fmt(val, decimals=1) {
+  if (val === null || val === undefined || isNaN(val)) return '<span class="val-na">—</span>';
+  return (+val).toFixed(decimals);
+}
+
+function tClass(z) {
+  if (z === null || z === undefined || isNaN(z)) return "t-neu";
+  return z > 0.3 ? "t-pos" : z < -0.3 ? "t-neg" : "t-neu";
+}
+
+function renderRow(a) {
+  const jerseyHtml = a.jersey_number ? `<span class="jersey">#${a.jersey_number}</span>` : "";
+  const cmjHtml  = a.cmj_domain != null ? fmt(a.cmj_domain) : '<span class="val-na">—</span>';
+  const gpsHtml  = a.gps_domain != null ? fmt(a.gps_domain) : '<span class="val-na">—</span>';
+  const bwHtml   = a.bw_domain  != null ? fmt(a.bw_domain)  : '<span class="val-na">—</span>';
+  const tsaHtml  = a.tsa_score  != null ? fmt(a.tsa_score)  : '<span class="val-na">—</span>';
+
+  return `
+    <tr class="athlete-row" data-id="${a.forcedecks_id}" data-pos="${a.position}" data-rag="${a.rag}"
+        data-name="${a.full_name.toLowerCase()}" onclick="toggleProfile('${a.forcedecks_id}')">
+      <td class="rank-cell">${a.tsa_rank ?? "—"}</td>
+      <td class="name-cell">${a.full_name}${jerseyHtml}</td>
+      <td class="pos-cell">${a.position}</td>
+      <td class="score-cell">${tsaHtml}</td>
+      <td class="domain-cell">${cmjHtml}</td>
+      <td class="domain-cell">${gpsHtml}</td>
+      <td class="domain-cell">${bwHtml}</td>
+      <td class="rag-cell"><span class="rag ${a.rag}"></span></td>
+    </tr>
+    <tr class="profile-row" id="profile-${a.forcedecks_id}">
+      <td colspan="8" class="profile-panel" id="panel-${a.forcedecks_id}"></td>
+    </tr>`;
+}
+
+function buildMetricsTable(a) {
+  const rows = [
+    { section: "CMJ", metrics: [
+      { label: "Jump Height",  raw: fmt(a.jump_height_cm, 1)+" cm", z: a.jump_height_z, t: a.jump_height_t, avg: fmt(TEAM_AVG.jump_height_cm, 1)+" cm" },
+      { label: "Peak Power/BM",raw: fmt(a.peak_power_bm, 1)+" W/kg", z: a.peak_power_bm_z, t: a.peak_power_bm_t, avg: fmt(TEAM_AVG.peak_power_bm, 1)+" W/kg" },
+      { label: "mRSI",         raw: fmt(a.mrsi, 3),                  z: a.mrsi_z,  t: a.mrsi_t,  avg: fmt(TEAM_AVG.mrsi, 3) },
+    ]},
+    { section: "GPS", metrics: [
+      { label: "High Speed Dist", raw: fmt(a.avg_hsd_m, 0)+" m",  z: a.hsd_z,         t: a.hsd_t,         avg: fmt(TEAM_AVG.avg_hsd_m, 0)+" m" },
+      { label: "Player Load",     raw: fmt(a.avg_player_load, 1),  z: a.player_load_z, t: a.player_load_t, avg: fmt(TEAM_AVG.avg_player_load, 1) },
+      { label: "Max Velocity",    raw: fmt(a.avg_max_velocity_ms, 2)+" m/s", z: a.max_vel_z, t: a.max_vel_t, avg: fmt(TEAM_AVG.avg_max_velocity_ms, 2)+" m/s" },
+    ]},
+    { section: "Body Weight", metrics: [
+      { label: "Weight",  raw: fmt(a.weight_kg, 1)+" kg",  z: a.weight_z,  t: a.weight_t,  avg: fmt(TEAM_AVG.weight_kg, 1)+" kg" },
+    ]},
+  ];
+
+  let html = '<div class="metrics-section"><table class="metrics-tbl"><thead><tr><th>Metric</th><th>Raw</th><th>Z</th><th>T</th><th>Team Avg</th></tr></thead><tbody>';
+  for (const sec of rows) {
+    html += `<tr><td colspan="5" style="padding:8px 8px 2px;color:#475569;font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.6px">${sec.section}</td></tr>`;
+    for (const m of sec.metrics) {
+      const zVal = (m.z !== null && m.z !== undefined && !isNaN(m.z)) ? (+m.z).toFixed(2) : '—';
+      const tVal = (m.t !== null && m.t !== undefined && !isNaN(m.t)) ? (+m.t).toFixed(1) : '—';
+      const cls  = tClass(m.z);
+      html += `<tr>
+        <td>${m.label}</td>
+        <td>${m.raw}</td>
+        <td class="${cls}">${zVal}</td>
+        <td class="${cls}">${tVal}</td>
+        <td style="color:#475569">${m.avg}</td>
+      </tr>`;
+    }
+  }
+  html += '</tbody></table></div>';
+  return html;
+}
+
+function buildProfile(a) {
+  const missingNote = a.missing_domains
+    ? `<p class="missing-note">Missing data: ${a.missing_domains} — TSA computed from available domains.</p>`
+    : "";
+
+  return `
+    <div class="profile-header">
+      <span class="profile-name">${a.full_name}</span>
+      <span class="profile-pos">${a.position}${a.jersey_number ? " · #"+a.jersey_number : ""}</span>
+      <span class="profile-rag-label ${a.rag}">${a.rag}</span>
+      <span class="profile-tsa">${fmt(a.tsa_score)} TSA</span>
+    </div>
+    <div class="profile-body">
+      <div>
+        <div class="chart-wrap">
+          <canvas id="chart-${a.forcedecks_id}"></canvas>
+        </div>
+      </div>
+      <div>
+        ${buildMetricsTable(a)}
+        ${missingNote}
+      </div>
+    </div>`;
+}
+
+function drawSpider(a) {
+  const canvasId = `chart-${a.forcedecks_id}`;
+  if (activeCharts[canvasId]) {
+    activeCharts[canvasId].destroy();
+    delete activeCharts[canvasId];
+  }
+  const ctx = document.getElementById(canvasId);
+  if (!ctx) return;
+
+  const athleteData = SPIDER_T_KEYS.map(k => {
+    const v = a[k];
+    return (v !== null && v !== undefined && !isNaN(v)) ? +v : 50;
+  });
+
+  // Team averages for each spider axis (t-score of team avg = 50 by construction, but show actual)
+  const teamData = SPIDER_T_KEYS.map(() => 50);
+
+  activeCharts[canvasId] = new Chart(ctx, {
+    type: "radar",
+    data: {
+      labels: SPIDER_LABELS,
+      datasets: [
+        {
+          label: a.full_name,
+          data: athleteData,
+          backgroundColor: "rgba(99, 102, 241, 0.2)",
+          borderColor: "#6366f1",
+          borderWidth: 2,
+          pointBackgroundColor: "#6366f1",
+          pointRadius: 4,
+        },
+        {
+          label: "Team Avg",
+          data: teamData,
+          backgroundColor: "rgba(100, 116, 139, 0.1)",
+          borderColor: "#475569",
+          borderWidth: 1,
+          borderDash: [4, 4],
+          pointRadius: 0,
+        },
+      ],
+    },
+    options: {
+      responsive: true,
+      maintainAspectRatio: true,
+      scales: {
+        r: {
+          min: 0, max: 100, ticks: { stepSize: 25, color: "#475569", font: { size: 9 } },
+          grid: { color: "#1e293b" },
+          angleLines: { color: "#1e293b" },
+          pointLabels: { color: "#94a3b8", font: { size: 10 } },
+        },
+      },
+      plugins: {
+        legend: { labels: { color: "#94a3b8", font: { size: 11 }, boxWidth: 12 } },
+      },
+    },
+  });
+}
+
+function toggleProfile(id) {
+  const profileRow = document.getElementById(`profile-${id}`);
+  const panel      = document.getElementById(`panel-${id}`);
+  const athleteRow = document.querySelector(`tr[data-id="${id}"]`);
+  const isOpen     = profileRow.classList.contains("open");
+
+  // Close any open profiles first
+  document.querySelectorAll(".profile-row.open").forEach(r => {
+    r.classList.remove("open");
+    const pid = r.id.replace("profile-", "");
+    const chartId = `chart-${pid}`;
+    if (activeCharts[chartId]) { activeCharts[chartId].destroy(); delete activeCharts[chartId]; }
+    document.querySelector(`tr[data-id="${pid}"]`)?.classList.remove("expanded");
+  });
+
+  if (!isOpen) {
+    const a = ATHLETES.find(x => x.forcedecks_id === id);
+    if (!a) return;
+    panel.innerHTML = buildProfile(a);
+    profileRow.classList.add("open");
+    athleteRow.classList.add("expanded");
+    requestAnimationFrame(() => drawSpider(a));
+  }
+}
+
+// ── Sorting ──
+function sortTable(col) {
+  if (sortCol === col) {
+    sortDesc = !sortDesc;
+  } else {
+    sortCol = col;
+    sortDesc = col !== "tsa_rank";
+  }
+  renderTable(currentFiltered());
+
+  document.querySelectorAll("thead th").forEach(th => th.classList.remove("sorted","desc"));
+  const th = document.getElementById(`th-${col}`);
+  if (th) { th.classList.add("sorted"); if (sortDesc) th.classList.add("desc"); }
+}
+
+function currentFiltered() {
+  const pos   = document.getElementById("posFilter").value;
+  const rag   = document.getElementById("ragFilter").value;
+  const query = document.getElementById("nameSearch").value.toLowerCase();
+  return ATHLETES.filter(a =>
+    (!pos   || a.position === pos) &&
+    (!rag   || a.rag === rag) &&
+    (!query || a.full_name.toLowerCase().includes(query))
+  );
+}
+
+function applyFilters() {
+  // Close any open profiles
+  document.querySelectorAll(".profile-row.open").forEach(r => {
+    r.classList.remove("open");
+    const pid = r.id.replace("profile-", "");
+    const chartId = `chart-${pid}`;
+    if (activeCharts[chartId]) { activeCharts[chartId].destroy(); delete activeCharts[chartId]; }
+  });
+  renderTable(currentFiltered());
+}
+
+function renderTable(data) {
+  const sorted = [...data].sort((a, b) => {
+    let av = a[sortCol], bv = b[sortCol];
+    if (av === null || av === undefined) av = sortDesc ? -Infinity : Infinity;
+    if (bv === null || bv === undefined) bv = sortDesc ? -Infinity : Infinity;
+    if (typeof av === "string") return sortDesc ? bv.localeCompare(av) : av.localeCompare(bv);
+    return sortDesc ? bv - av : av - bv;
+  });
+
+  const tbody = document.getElementById("tableBody");
+  tbody.innerHTML = sorted.map(renderRow).join("");
+  document.getElementById("noResults").style.display = sorted.length === 0 ? "block" : "none";
+}
+
+// ── Init ──
+renderTable(ATHLETES);
+</script>
+</body>
+</html>
