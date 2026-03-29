@@ -12,7 +12,7 @@ python generate_report.py --start 2025-09-01 --end 2026-03-28 --label "Spring 20
 # Output: output/Spring_2026_2026-03-28.html
 ```
 
-> The original React + FastAPI spec (TECH_SPEC.md, UI_WIREFRAMES.md) was replaced by this approach. Those files remain as reference but do not reflect the implementation.
+> The original React + FastAPI spec has been replaced by this approach. Reference specs are in `docs/` (TECH_SPEC.md, UI_WIREFRAMES.md, DATA_SCHEMA.md, TSA_METHODOLOGY.md) and do not reflect the implementation.
 
 ---
 
@@ -100,4 +100,4 @@ See [CONTEXT.md](CONTEXT.md) for full detail. Key deferred items:
 
 - Branches: `main` (stable) -> `dev` (active) -> `feature/*`
 - Commit prefixes: `feat:`, `fix:`, `refactor:`, `data:`, `docs:`
-- `.gitignore` excludes: `output/`, `__pycache__/`, `venv/`, `.env`, `data/*.duckdb`, `data/raw/`
+- `.gitignore` excludes: `__pycache__/`, `venv/`, `.env`, `data/*.duckdb`, `data/raw/`
