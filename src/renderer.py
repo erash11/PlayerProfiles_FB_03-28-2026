@@ -29,8 +29,10 @@ _Z_MAP = {
 
 
 def _safe(val):
-    """Convert NaN/inf to None for JSON serialization."""
+    """Convert NaN/inf/NaT to None for JSON serialization."""
     if val is None:
+        return None
+    if val is pd.NaT:
         return None
     try:
         if math.isnan(val) or math.isinf(val):
@@ -197,6 +199,11 @@ def build_history(athlete_records, cmj_hist, gps_hist, bw_hist, imtp_hist, pop_s
 
 def render(
     df_scored: pd.DataFrame,
+    pop_stats: dict,
+    cmj_hist: pd.DataFrame,
+    gps_hist: pd.DataFrame,
+    bw_hist: pd.DataFrame,
+    imtp_hist: pd.DataFrame,
     label: str,
     start_date: str,
     end_date: str,
@@ -218,7 +225,6 @@ def render(
         "cmj_domain", "gps_domain", "bw_domain", "strength_domain",
         "tsa_score", "tsa_rank", "rag", "missing_domains",
     ]
-    # Only include columns that exist
     cols = [c for c in include_cols if c in df.columns]
 
     records = []
@@ -230,13 +236,16 @@ def render(
                 rec[c] = None
             elif isinstance(v, (int, float)):
                 rec[c] = _safe(float(v))
-            elif hasattr(v, "item"):          # numpy scalar
+            elif hasattr(v, "item"):
                 rec[c] = _safe(v.item())
             else:
                 rec[c] = v
         records.append(rec)
 
-    # Team averages for display in metrics table
+    # Attach longitudinal history arrays to each athlete record
+    build_history(records, cmj_hist, gps_hist, bw_hist, imtp_hist, pop_stats)
+
+    # Team averages
     numeric_cols = [
         "jump_height_cm", "peak_power_bm", "mrsi",
         "avg_hsd_m", "avg_player_load", "avg_max_velocity_ms", "weight_kg",
@@ -244,7 +253,6 @@ def render(
     ]
     team_avg = {c: _safe(df[c].mean()) if c in df.columns else None for c in numeric_cols}
 
-    # Coverage counts
     cmj_count  = int(df["jump_height_cm"].notna().sum()) if "jump_height_cm" in df.columns else 0
     gps_count  = int(df["avg_hsd_m"].notna().sum())      if "avg_hsd_m" in df.columns else 0
     bw_count   = int(df["weight_kg"].notna().sum())       if "weight_kg" in df.columns else 0

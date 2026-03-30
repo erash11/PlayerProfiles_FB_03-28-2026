@@ -31,13 +31,25 @@ def main():
     print(f"  BW  coverage:     {df['weight_kg'].notna().sum()}/{len(df)}")
     print(f"  IMTP coverage:    {df['peak_force_bm'].notna().sum()}/{len(df)}")
 
-    print("Scoring …")
-    df_scored = score(df)
+    print("Scoring ...")
+    df_scored, pop_stats = score(df)
     rag_counts = df_scored["rag"].value_counts()
     print(f"  Green: {rag_counts.get('green', 0)}  Amber: {rag_counts.get('amber', 0)}  Red: {rag_counts.get('red', 0)}")
 
-    print("Rendering HTML …")
-    html = render(df_scored, args.label, args.start, args.end)
+    print("Loading history ...")
+    from src.data import load_cmj_history, load_imtp_history, load_bw_history, load_gps_history
+    cmj_hist  = load_cmj_history(args.start, args.end)
+    imtp_hist = load_imtp_history(args.start, args.end)
+    bw_hist   = load_bw_history(args.end)
+    gps_hist  = load_gps_history(args.start, args.end)
+    print(f"  CMJ tests:    {len(cmj_hist)}")
+    print(f"  IMTP tests:   {len(imtp_hist)}")
+    print(f"  BW entries:   {len(bw_hist)}")
+    print(f"  GPS sessions: {len(gps_hist)}")
+
+    print("Rendering HTML ...")
+    html = render(df_scored, pop_stats, cmj_hist, gps_hist, bw_hist, imtp_hist,
+                  args.label, args.start, args.end)
 
     if args.output:
         out_path = Path(args.output)
