@@ -1,7 +1,12 @@
 {
   "permissions": {
     "allow": [
-      "Bash(git config:*)"
+      "Bash(git config:*)",
+      "Bash(git add:*)",
+      "Bash(git commit:*)",
+      "Bash(python -m pytest tests/test_history.py -v)",
+      "Bash(python -m pytest tests/test_history.py::test_build_history_attaches_empty_lists_when_no_data -v)",
+      "Bash(python -m pytest tests/test_history.py -v --tb=short)"
     ]
   }
 }
