@@ -129,6 +129,37 @@
   .missing-note {
     font-size: 11px; color: #475569; margin-top: 12px; font-style: italic;
   }
+
+  /* ── Trends Section ── */
+  .trends-section { border-top: 1px solid #1e293b; padding: 16px 20px 20px; }
+  .trends-header { display: flex; align-items: center; margin-bottom: 10px; }
+  .trends-label {
+    font-size: 11px; font-weight: 700; color: #475569;
+    text-transform: uppercase; letter-spacing: 0.6px;
+  }
+  .trend-combined-wrap {
+    background: #0f1117; border-radius: 8px;
+    padding: 12px 16px 8px; margin-bottom: 10px;
+  }
+  .trend-buttons { display: flex; gap: 8px; flex-wrap: wrap; margin-bottom: 6px; }
+  .trend-btn {
+    display: flex; align-items: center; gap: 5px; border: 1px solid;
+    border-radius: 5px; padding: 4px 10px; font-size: 11px;
+    cursor: pointer; background: transparent; font-family: inherit;
+    transition: opacity 0.15s;
+  }
+  .trend-btn:hover { opacity: 0.8; }
+  .tbtn-arrow { font-size: 9px; transition: transform 0.2s; display: inline-block; }
+  .trend-btn.active .tbtn-arrow { transform: rotate(90deg); }
+  .trend-detail {
+    background: #0f1117; border: 1px solid; border-radius: 8px;
+    padding: 12px 16px 8px; margin-bottom: 6px; display: none;
+  }
+  .trend-detail.open { display: block; }
+  .trend-detail-title {
+    font-size: 10px; font-weight: 700; text-transform: uppercase;
+    letter-spacing: 0.6px; margin-bottom: 8px;
+  }
 </style>
 </head>
 <body>
@@ -327,6 +358,47 @@ function buildProfile(a) {
         ${buildMetricsTable(a)}
         ${missingNote}
       </div>
+    </div>
+    ${buildTrendsSection(a)}`;
+}
+
+const TREND_DOMAIN_CFG = [
+  { key: "cmj",  histKey: "cmj_history",  domainT: "cmj_domain_t",  label: "CMJ",         color: "#6366f1" },
+  { key: "gps",  histKey: "gps_history",  domainT: "gps_domain_t",  label: "GPS",         color: "#22c55e" },
+  { key: "bw",   histKey: "bw_history",   domainT: "bw_domain_t",   label: "Body Weight", color: "#f59e0b" },
+  { key: "imtp", histKey: "imtp_history", domainT: "str_domain_t",  label: "Strength",    color: "#ef4444" },
+];
+
+function buildTrendsSection(a) {
+  const hasAny = TREND_DOMAIN_CFG.some(d => a[d.histKey] && a[d.histKey].length > 0);
+  if (!hasAny) return "";
+
+  const buttons = TREND_DOMAIN_CFG
+    .filter(d => a[d.histKey] && a[d.histKey].length > 0)
+    .map(d => `<button class="trend-btn" id="tbtn-${d.key}-${a.forcedecks_id}"
+        onclick="toggleTrendDomain('${d.key}','${a.forcedecks_id}')"
+        style="color:${d.color};border-color:${d.color}55">
+        <span class="tbtn-arrow">▶</span> ${d.label}
+      </button>`).join("");
+
+  const details = TREND_DOMAIN_CFG
+    .filter(d => a[d.histKey] && a[d.histKey].length > 0)
+    .map(d => `<div class="trend-detail" id="tdetail-${d.key}-${a.forcedecks_id}"
+        style="border-color:${d.color}33">
+        <div class="trend-detail-title" style="color:${d.color}">${d.label} — Individual Metrics</div>
+        <canvas id="trend-${d.key}-${a.forcedecks_id}"></canvas>
+      </div>`).join("");
+
+  return `
+    <div class="trends-section">
+      <div class="trends-header">
+        <span class="trends-label">Performance Trends</span>
+      </div>
+      <div class="trend-combined-wrap">
+        <canvas id="trend-combined-${a.forcedecks_id}"></canvas>
+      </div>
+      <div class="trend-buttons">${buttons}</div>
+      ${details}
     </div>`;
 }
 
