@@ -33,17 +33,24 @@ def _z_to_t(series: pd.Series) -> pd.Series:
     return (z * 10 + 50).clip(0, 100)
 
 
-def score(df: pd.DataFrame) -> pd.DataFrame:
+def score(df: pd.DataFrame) -> tuple[pd.DataFrame, dict]:
     """
     Adds t-score columns, domain scores, TSA composite, TSA rank, and RAG to df.
     Operates on available data only — athletes missing a domain get NaN for that domain.
-    Returns a copy sorted by tsa_rank ascending.
+    Returns (scored_df sorted by tsa_rank, pop_stats dict with mean/std per raw metric).
     """
     out = df.copy()
+    pop_stats = {}
 
-    # T-scores for each metric (population = all athletes with that metric)
+    # T-scores for each metric; collect population stats for history scoring
     for raw_col, t_col in _METRICS.items():
-        out[t_col] = _z_to_t(out[raw_col])
+        series = out[raw_col] if raw_col in out.columns else pd.Series(dtype=float, index=out.index)
+        valid = series.dropna()
+        if len(valid) >= 2 and valid.std() > 0:
+            pop_stats[raw_col] = {"mean": float(valid.mean()), "std": float(valid.std())}
+        else:
+            pop_stats[raw_col] = {"mean": None, "std": None}
+        out[t_col] = _z_to_t(series) if raw_col in out.columns else pd.Series(50.0, index=out.index)
 
     # Domain composites — mean of available t-scores in that domain
     out["cmj_domain"]      = out[_CMJ_T].mean(axis=1, skipna=False)
@@ -78,4 +85,4 @@ def score(df: pd.DataFrame) -> pd.DataFrame:
         missing.append(", ".join(domains))
     out["missing_domains"] = missing
 
-    return out.sort_values("tsa_rank").reset_index(drop=True)
+    return out.sort_values("tsa_rank").reset_index(drop=True), pop_stats
