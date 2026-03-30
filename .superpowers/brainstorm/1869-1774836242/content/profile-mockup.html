@@ -1,0 +1,561 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Athlete Profile Mockup — Trend Charts</title>
+<script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
+<style>
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body { background: #0a0a14; color: #e0e0f0; font-family: 'Segoe UI', system-ui, sans-serif; padding: 24px; }
+
+  h2 { color: #e0e0ff; margin-bottom: 6px; font-size: 1.1rem; }
+  .subtitle { color: #888; font-size: 0.875rem; margin-bottom: 20px; }
+
+  /* ── Profile Panel ── */
+  .profile-panel {
+    background: #111124;
+    border: 1px solid #2a2a4a;
+    border-radius: 10px;
+    overflow: hidden;
+    max-width: 960px;
+  }
+
+  /* Header row */
+  .profile-header {
+    display: flex;
+    align-items: center;
+    gap: 16px;
+    padding: 14px 20px;
+    background: #16162a;
+    border-bottom: 1px solid #2a2a4a;
+  }
+  .athlete-name { font-size: 1.15rem; font-weight: 700; color: #e0e0ff; }
+  .athlete-meta { color: #888; font-size: 0.8rem; margin-top: 2px; }
+  .tsa-badge { margin-left: auto; text-align: right; }
+  .tsa-score { font-size: 1.4rem; font-weight: 800; color: #43b581; }
+  .tsa-label { font-size: 0.65rem; color: #666; text-transform: uppercase; letter-spacing: 1px; }
+  .rag-pill { display: inline-block; background: #2d4a2d; color: #6fcf6f; border-radius: 12px; padding: 2px 10px; font-size: 0.72rem; font-weight: 600; margin-top: 4px; }
+
+  /* Body: radar + metrics */
+  .profile-body {
+    display: grid;
+    grid-template-columns: 280px 1fr;
+    gap: 0;
+    border-bottom: 1px solid #1e1e38;
+  }
+  .chart-wrap {
+    padding: 16px;
+    border-right: 1px solid #1e1e38;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+  }
+  .metrics-panel { padding: 16px 20px; }
+  .metrics-section { margin-bottom: 14px; }
+  .metrics-section h4 { font-size: 0.7rem; text-transform: uppercase; letter-spacing: 1px; color: #666; margin-bottom: 6px; padding-bottom: 4px; border-bottom: 1px solid #1e1e38; }
+  .metrics-tbl { width: 100%; border-collapse: collapse; font-size: 0.78rem; }
+  .metrics-tbl td { padding: 3px 6px; color: #bbb; }
+  .metrics-tbl td:first-child { color: #888; font-size: 0.73rem; }
+  .metrics-tbl td.val-green { color: #43b581; font-weight: 600; }
+  .metrics-tbl td.val-red { color: #f04747; font-weight: 600; }
+
+  /* ── Trends Section ── */
+  .trends-section {
+    padding: 16px 20px 20px;
+  }
+  .trends-header {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    margin-bottom: 14px;
+  }
+  .trends-title {
+    font-size: 0.72rem;
+    text-transform: uppercase;
+    letter-spacing: 1px;
+    color: #666;
+  }
+  .trends-date-range {
+    margin-left: auto;
+    font-size: 0.68rem;
+    color: #444;
+  }
+
+  /* Combined chart */
+  .combined-chart-wrap {
+    background: #0d0d1a;
+    border-radius: 8px;
+    padding: 14px 16px 10px;
+    margin-bottom: 10px;
+    position: relative;
+  }
+  .combined-chart-wrap canvas { display: block; }
+
+  /* Domain expand buttons */
+  .domain-buttons {
+    display: flex;
+    gap: 8px;
+    flex-wrap: wrap;
+    margin-bottom: 10px;
+  }
+  .domain-btn {
+    display: flex;
+    align-items: center;
+    gap: 5px;
+    border: 1px solid;
+    border-radius: 5px;
+    padding: 4px 12px;
+    font-size: 0.72rem;
+    cursor: pointer;
+    background: transparent;
+    transition: background 0.15s;
+    font-family: inherit;
+  }
+  .domain-btn:hover { opacity: 0.85; }
+  .domain-btn.cmj   { color: #5865f2; border-color: #5865f240; }
+  .domain-btn.gps   { color: #43b581; border-color: #43b58140; }
+  .domain-btn.bw    { color: #faa61a; border-color: #faa61a40; }
+  .domain-btn.str   { color: #f04747; border-color: #f0474740; }
+  .domain-btn.active { }
+  .domain-btn.cmj.active   { background: #5865f218; border-color: #5865f2; }
+  .domain-btn.gps.active   { background: #43b58118; border-color: #43b581; }
+  .domain-btn.bw.active    { background: #faa61a18; border-color: #faa61a; }
+  .domain-btn.str.active   { background: #f0474718; border-color: #f04747; }
+  .btn-arrow { font-size: 0.6rem; transition: transform 0.2s; }
+  .domain-btn.active .btn-arrow { transform: rotate(90deg); }
+
+  /* Expanded detail chart */
+  .detail-chart-wrap {
+    background: #0a0a14;
+    border-radius: 8px;
+    padding: 14px 16px 10px;
+    border: 1px solid;
+    margin-bottom: 6px;
+    display: none;
+  }
+  .detail-chart-wrap.visible { display: block; }
+  .detail-chart-wrap.cmj  { border-color: #5865f230; }
+  .detail-chart-wrap.gps  { border-color: #43b58130; }
+  .detail-chart-wrap.bw   { border-color: #faa61a30; }
+  .detail-chart-wrap.str  { border-color: #f0474730; }
+  .detail-title {
+    font-size: 0.68rem;
+    text-transform: uppercase;
+    letter-spacing: 0.8px;
+    margin-bottom: 10px;
+  }
+  .detail-title.cmj { color: #5865f2; }
+  .detail-title.gps { color: #43b581; }
+  .detail-title.bw  { color: #faa61a; }
+  .detail-title.str { color: #f04747; }
+
+  .note { font-size: 0.7rem; color: #555; text-align: center; margin-top: 16px; font-style: italic; }
+</style>
+</head>
+<body>
+
+<h2>Athlete Profile — Trend Charts Mockup</h2>
+<p class="subtitle">This is how the profile panel will look with trend charts added. Click the domain buttons to expand/collapse detail.</p>
+
+<div class="profile-panel">
+
+  <!-- Header -->
+  <div class="profile-header">
+    <div>
+      <div class="athlete-name">#24 &nbsp; Marcus Williams</div>
+      <div class="athlete-meta">WR &nbsp;·&nbsp; ForceDecks ID: fd_0024</div>
+    </div>
+    <div class="tsa-badge">
+      <div class="tsa-score">63.4</div>
+      <div class="tsa-label">TSA Score</div>
+      <div class="rag-pill">● Green</div>
+    </div>
+  </div>
+
+  <!-- Body: radar + metrics (existing, unchanged) -->
+  <div class="profile-body">
+    <div class="chart-wrap">
+      <canvas id="radarChart" width="240" height="240"></canvas>
+    </div>
+    <div class="metrics-panel">
+      <div class="metrics-section">
+        <h4>CMJ</h4>
+        <table class="metrics-tbl">
+          <tr><td>Jump Height</td><td class="val-green">68.2 cm</td><td>z: +0.81</td><td class="val-green">t: 58.1</td></tr>
+          <tr><td>Peak Power / BM</td><td class="val-green">23.4 W/kg</td><td>z: +0.62</td><td class="val-green">t: 56.2</td></tr>
+          <tr><td>mRSI</td><td>2.41</td><td>z: +0.09</td><td>t: 50.9</td></tr>
+        </table>
+      </div>
+      <div class="metrics-section">
+        <h4>GPS</h4>
+        <table class="metrics-tbl">
+          <tr><td>High Speed Distance</td><td class="val-green">512 m</td><td>z: +0.44</td><td class="val-green">t: 54.4</td></tr>
+          <tr><td>Player Load</td><td>118.2</td><td>z: +0.11</td><td>t: 51.1</td></tr>
+          <tr><td>Max Velocity</td><td class="val-green">8.3 m/s</td><td>z: +0.55</td><td class="val-green">t: 55.5</td></tr>
+        </table>
+      </div>
+      <div class="metrics-section">
+        <h4>Body Weight</h4>
+        <table class="metrics-tbl">
+          <tr><td>Weight</td><td>88.4 kg</td><td>z: −0.18</td><td>t: 48.2</td></tr>
+        </table>
+      </div>
+      <div class="metrics-section">
+        <h4>Strength (IMTP)</h4>
+        <table class="metrics-tbl">
+          <tr><td>Peak Force / BM</td><td class="val-green">30.8 N/kg</td><td>z: +0.72</td><td class="val-green">t: 57.2</td></tr>
+          <tr><td>RFD 0–100ms</td><td>7,840 N/s</td><td>z: +0.28</td><td>t: 52.8</td></tr>
+          <tr><td>RFD 0–200ms</td><td>6,520 N/s</td><td>z: +0.19</td><td>t: 51.9</td></tr>
+        </table>
+      </div>
+    </div>
+  </div>
+
+  <!-- ── NEW: Trends Section ── -->
+  <div class="trends-section">
+    <div class="trends-header">
+      <span class="trends-title">Performance Trends</span>
+      <span class="trends-date-range">Sep 2025 – Mar 2026</span>
+    </div>
+
+    <!-- Combined domain t-score chart -->
+    <div class="combined-chart-wrap">
+      <canvas id="combinedChart" height="90"></canvas>
+    </div>
+
+    <!-- Domain expand buttons -->
+    <div class="domain-buttons">
+      <button class="domain-btn cmj" onclick="toggleDomain('cmj', this)">
+        <span class="btn-arrow">▶</span> CMJ
+      </button>
+      <button class="domain-btn gps" onclick="toggleDomain('gps', this)">
+        <span class="btn-arrow">▶</span> GPS
+      </button>
+      <button class="domain-btn bw" onclick="toggleDomain('bw', this)">
+        <span class="btn-arrow">▶</span> Body Weight
+      </button>
+      <button class="domain-btn str" onclick="toggleDomain('str', this)">
+        <span class="btn-arrow">▶</span> Strength
+      </button>
+    </div>
+
+    <!-- CMJ Detail -->
+    <div class="detail-chart-wrap cmj" id="detail-cmj">
+      <div class="detail-title cmj">CMJ — Individual Metrics (raw values, hover for t-score)</div>
+      <canvas id="cmjDetail" height="80"></canvas>
+    </div>
+
+    <!-- GPS Detail -->
+    <div class="detail-chart-wrap gps" id="detail-gps">
+      <div class="detail-title gps">GPS — 7-Day Rolling Avg (raw values, hover for t-score)</div>
+      <canvas id="gpsDetail" height="80"></canvas>
+    </div>
+
+    <!-- Body Weight Detail -->
+    <div class="detail-chart-wrap bw" id="detail-bw">
+      <div class="detail-title bw">Body Weight (kg)</div>
+      <canvas id="bwDetail" height="80"></canvas>
+    </div>
+
+    <!-- Strength Detail -->
+    <div class="detail-chart-wrap str" id="detail-str">
+      <div class="detail-title str">Strength (IMTP) — raw values, hover for t-score</div>
+      <canvas id="strDetail" height="80"></canvas>
+    </div>
+  </div>
+
+</div>
+
+<p class="note">Mockup only — data is illustrative. Existing profile content (radar + metrics table) is unchanged.</p>
+
+<script>
+// ── Shared dates ──
+const MONTHS = ['Sep','Oct','Nov','Dec','Jan','Feb','Mar'];
+const DATES_CMJ  = ['Sep 5','Oct 3','Nov 7','Dec 12','Jan 16','Feb 6','Mar 14'];
+const DATES_IMTP = ['Sep 10','Oct 15','Nov 20','Jan 8','Feb 20','Mar 20'];
+const DATES_BW   = ['Sep 1','Sep 28','Oct 26','Nov 23','Dec 21','Jan 18','Feb 15','Mar 8'];
+// GPS: 7-day rolling avg points
+const DATES_GPS  = ['Sep 14','Sep 21','Sep 28','Oct 5','Oct 12','Oct 19','Oct 26','Nov 2','Nov 9','Nov 16','Nov 23','Nov 30','Dec 7','Jan 11','Jan 18','Jan 25','Feb 1','Feb 8','Feb 15','Feb 22','Mar 1','Mar 8','Mar 15','Mar 22'];
+
+const chartDefaults = {
+  responsive: true,
+  animation: false,
+  plugins: {
+    legend: { labels: { color: '#888', font: { size: 11 }, boxWidth: 16, padding: 14 } },
+    tooltip: {
+      backgroundColor: '#1a1a2e',
+      titleColor: '#aaa',
+      bodyColor: '#e0e0ff',
+      borderColor: '#333',
+      borderWidth: 1,
+      padding: 8,
+    }
+  },
+  scales: {
+    x: { ticks: { color: '#555', font: { size: 10 }, maxRotation: 0 }, grid: { color: '#1a1a2e' } },
+    y: { ticks: { color: '#555', font: { size: 10 } }, grid: { color: '#1a1a2e' } }
+  }
+};
+
+// ── Radar chart (existing, unchanged) ──
+new Chart(document.getElementById('radarChart'), {
+  type: 'radar',
+  data: {
+    labels: ['Jump Ht','Pk Pwr','mRSI','HSD','Pl Load','Max Vel','Body Wt','Strength'],
+    datasets: [{
+      label: 'Marcus Williams',
+      data: [58, 56, 51, 54, 51, 56, 48, 57],
+      backgroundColor: 'rgba(88,101,242,0.15)',
+      borderColor: '#5865f2',
+      borderWidth: 2,
+      pointBackgroundColor: '#5865f2',
+      pointRadius: 3,
+    }]
+  },
+  options: {
+    responsive: false,
+    animation: false,
+    plugins: { legend: { display: false } },
+    scales: {
+      r: {
+        min: 0, max: 100,
+        ticks: { stepSize: 25, color: '#444', font: { size: 9 }, backdropColor: 'transparent' },
+        grid: { color: '#1e1e38' },
+        pointLabels: { color: '#666', font: { size: 9 } },
+        angleLines: { color: '#1e1e38' }
+      }
+    }
+  }
+});
+
+// ── Combined chart (domain t-scores) ──
+new Chart(document.getElementById('combinedChart'), {
+  type: 'line',
+  data: {
+    labels: MONTHS,
+    datasets: [
+      {
+        label: 'CMJ',
+        data: [50, 52, 54, 55, 56, 57, 55],
+        borderColor: '#5865f2', backgroundColor: 'transparent',
+        borderWidth: 2.5, pointRadius: 3, pointHoverRadius: 5, tension: 0.3
+      },
+      {
+        label: 'GPS',
+        data: [49, 51, 52, null, 53, 54, 55],
+        borderColor: '#43b581', backgroundColor: 'transparent',
+        borderWidth: 2.5, pointRadius: 3, pointHoverRadius: 5, tension: 0.3,
+        spanGaps: false
+      },
+      {
+        label: 'Body Wt',
+        data: [51, 50, 50, 49, 49, 48, 48],
+        borderColor: '#faa61a', backgroundColor: 'transparent',
+        borderWidth: 2.5, pointRadius: 3, pointHoverRadius: 5, tension: 0.3
+      },
+      {
+        label: 'Strength',
+        data: [48, 51, 53, 55, 57, 57, 57],
+        borderColor: '#f04747', backgroundColor: 'transparent',
+        borderWidth: 2.5, pointRadius: 3, pointHoverRadius: 5, tension: 0.3
+      }
+    ]
+  },
+  options: {
+    ...chartDefaults,
+    plugins: {
+      ...chartDefaults.plugins,
+      tooltip: {
+        ...chartDefaults.plugins.tooltip,
+        callbacks: {
+          title: (items) => items[0].label,
+          label: (item) => ` ${item.dataset.label}: t = ${item.raw}`
+        }
+      }
+    },
+    scales: {
+      x: { ...chartDefaults.scales.x },
+      y: {
+        ...chartDefaults.scales.y,
+        min: 30, max: 70,
+        title: { display: true, text: 'T-Score', color: '#555', font: { size: 10 } }
+      }
+    }
+  }
+});
+
+// ── CMJ Detail ──
+new Chart(document.getElementById('cmjDetail'), {
+  type: 'line',
+  data: {
+    labels: DATES_CMJ,
+    datasets: [
+      {
+        label: 'Jump Height (cm)',
+        data: [64.1, 65.8, 67.2, 67.9, 68.5, 68.0, 68.2],
+        borderColor: '#5865f2', backgroundColor: 'transparent',
+        borderWidth: 2, pointRadius: 4, tension: 0.3
+      },
+      {
+        label: 'Peak Power / BM (W/kg)',
+        data: [21.8, 22.4, 22.9, 23.1, 23.4, 23.2, 23.4],
+        borderColor: '#7289da', backgroundColor: 'transparent',
+        borderWidth: 2, pointRadius: 4, tension: 0.3, borderDash: [5, 3]
+      },
+      {
+        label: 'mRSI',
+        data: [2.28, 2.34, 2.37, 2.40, 2.41, 2.39, 2.41],
+        borderColor: '#99aab5', backgroundColor: 'transparent',
+        borderWidth: 2, pointRadius: 4, tension: 0.3, borderDash: [2, 4]
+      }
+    ]
+  },
+  options: {
+    ...chartDefaults,
+    plugins: {
+      ...chartDefaults.plugins,
+      tooltip: {
+        ...chartDefaults.plugins.tooltip,
+        callbacks: {
+          label: (item) => {
+            const tScores = { 'Jump Height (cm)': [48,50,52,53,55,54,56], 'Peak Power / BM (W/kg)': [47,49,51,52,54,53,56], 'mRSI': [46,48,49,50,51,50,51] };
+            const t = tScores[item.dataset.label]?.[item.dataIndex] ?? '—';
+            return ` ${item.dataset.label}: ${item.raw}  (t = ${t})`;
+          }
+        }
+      }
+    }
+  }
+});
+
+// ── GPS Detail ──
+new Chart(document.getElementById('gpsDetail'), {
+  type: 'line',
+  data: {
+    labels: DATES_GPS,
+    datasets: [
+      {
+        label: 'HSD (m)',
+        data: [380,420,445,460,480,490,505,510,515,508,512,518,520,null,498,505,510,514,515,518,510,512,515,512],
+        borderColor: '#43b581', backgroundColor: 'transparent',
+        borderWidth: 2, pointRadius: 2, tension: 0.4, spanGaps: false
+      },
+      {
+        label: 'Player Load',
+        data: [108,112,115,118,120,121,120,119,120,118,119,121,118,null,115,117,118,119,118,120,117,118,120,118],
+        borderColor: '#7ee8a2', backgroundColor: 'transparent',
+        borderWidth: 1.5, pointRadius: 2, tension: 0.4, borderDash: [5,3], spanGaps: false
+      },
+      {
+        label: 'Max Velocity (m/s)',
+        data: [7.8,8.0,8.1,8.2,8.2,8.3,8.3,8.3,8.3,8.2,8.3,8.4,8.3,null,8.1,8.2,8.3,8.3,8.3,8.4,8.3,8.3,8.3,8.3],
+        borderColor: '#a8e6c4', backgroundColor: 'transparent',
+        borderWidth: 1.5, pointRadius: 2, tension: 0.4, borderDash: [2,4], spanGaps: false
+      }
+    ]
+  },
+  options: {
+    ...chartDefaults,
+    plugins: {
+      ...chartDefaults.plugins,
+      tooltip: { ...chartDefaults.plugins.tooltip }
+    },
+    scales: {
+      x: { ...chartDefaults.scales.x, ticks: { ...chartDefaults.scales.x.ticks, maxTicksLimit: 8 } },
+      y: { ...chartDefaults.scales.y }
+    }
+  }
+});
+
+// ── Body Weight Detail ──
+new Chart(document.getElementById('bwDetail'), {
+  type: 'line',
+  data: {
+    labels: DATES_BW,
+    datasets: [{
+      label: 'Weight (kg)',
+      data: [89.2, 89.0, 88.8, 88.6, 88.5, 88.4, 88.5, 88.4],
+      borderColor: '#faa61a', backgroundColor: 'rgba(250,166,26,0.08)',
+      borderWidth: 2.5, pointRadius: 4, tension: 0.3, fill: true
+    }]
+  },
+  options: {
+    ...chartDefaults,
+    plugins: {
+      ...chartDefaults.plugins,
+      tooltip: {
+        ...chartDefaults.plugins.tooltip,
+        callbacks: {
+          label: (item) => {
+            const tScores = [51, 51, 50, 50, 49, 49, 49, 48];
+            return ` Weight: ${item.raw} kg  (t = ${tScores[item.dataIndex]})`;
+          }
+        }
+      }
+    },
+    scales: {
+      x: { ...chartDefaults.scales.x },
+      y: { ...chartDefaults.scales.y, min: 85, max: 93, title: { display: true, text: 'kg', color: '#555', font: { size: 10 } } }
+    }
+  }
+});
+
+// ── Strength Detail ──
+new Chart(document.getElementById('strDetail'), {
+  type: 'line',
+  data: {
+    labels: DATES_IMTP,
+    datasets: [
+      {
+        label: 'Peak Force / BM (N/kg)',
+        data: [27.4, 28.9, 29.8, 30.2, 30.5, 30.8],
+        borderColor: '#f04747', backgroundColor: 'transparent',
+        borderWidth: 2, pointRadius: 4, tension: 0.3
+      },
+      {
+        label: 'RFD 0–100ms (N/s)',
+        data: [7100, 7380, 7620, 7750, 7810, 7840],
+        borderColor: '#ff7a7a', backgroundColor: 'transparent',
+        borderWidth: 1.5, pointRadius: 4, tension: 0.3, borderDash: [5,3]
+      },
+      {
+        label: 'RFD 0–200ms (N/s)',
+        data: [5900, 6100, 6280, 6380, 6450, 6520],
+        borderColor: '#ffaaaa', backgroundColor: 'transparent',
+        borderWidth: 1.5, pointRadius: 4, tension: 0.3, borderDash: [2,4]
+      }
+    ]
+  },
+  options: {
+    ...chartDefaults,
+    plugins: {
+      ...chartDefaults.plugins,
+      tooltip: {
+        ...chartDefaults.plugins.tooltip,
+        callbacks: {
+          label: (item) => {
+            const tMap = {
+              'Peak Force / BM (N/kg)': [44,47,50,52,54,57],
+              'RFD 0–100ms (N/s)': [43,46,49,51,52,53],
+              'RFD 0–200ms (N/s)': [42,45,47,50,51,52]
+            };
+            const t = tMap[item.dataset.label]?.[item.dataIndex] ?? '—';
+            return ` ${item.dataset.label}: ${item.raw}  (t = ${t})`;
+          }
+        }
+      }
+    }
+  }
+});
+
+// ── Toggle domain detail ──
+function toggleDomain(domain, btn) {
+  const wrap = document.getElementById('detail-' + domain);
+  const isOpen = wrap.classList.contains('visible');
+  wrap.classList.toggle('visible', !isOpen);
+  btn.classList.toggle('active', !isOpen);
+}
+</script>
+</body>
+</html>

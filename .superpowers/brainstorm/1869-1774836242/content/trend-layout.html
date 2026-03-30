@@ -1,0 +1,209 @@
+<h2>Trend Chart Layout Options</h2>
+<p class="subtitle">How should longitudinal trends appear in the athlete profile panel?</p>
+
+<style>
+  .cards { display: flex; flex-direction: column; gap: 20px; }
+  .card { background: #1a1a2e; border: 2px solid #2a2a4a; border-radius: 10px; padding: 20px; cursor: pointer; transition: border-color 0.2s; }
+  .card:hover { border-color: #5865f2; }
+  .card.selected { border-color: #5865f2; box-shadow: 0 0 0 3px rgba(88,101,242,0.3); }
+  .card-header { display: flex; align-items: center; gap: 12px; margin-bottom: 14px; }
+  .card-letter { background: #5865f2; color: white; border-radius: 50%; width: 32px; height: 32px; display: flex; align-items: center; justify-content: center; font-weight: bold; flex-shrink: 0; }
+  .card-title { font-size: 1.1rem; font-weight: bold; color: #e0e0ff; }
+  .card-desc { color: #aaa; font-size: 0.875rem; margin-bottom: 16px; }
+  .rec-badge { background: #2d4a2d; color: #6fcf6f; border: 1px solid #4a7a4a; border-radius: 4px; padding: 2px 8px; font-size: 0.75rem; font-weight: bold; }
+
+  /* Dark mockup container */
+  .dark-mockup { background: #0f0f1a; border: 1px solid #333; border-radius: 8px; padding: 12px; font-family: monospace; }
+  .dm-header { color: #888; font-size: 0.7rem; text-transform: uppercase; letter-spacing: 1px; margin-bottom: 8px; }
+
+  /* Option A: Single combined line chart mockup */
+  .chart-combined { position: relative; height: 110px; background: #111; border-radius: 6px; overflow: hidden; padding: 8px; }
+  .chart-combined svg { width: 100%; height: 100%; }
+
+  /* Option B: 2x2 grid of mini charts */
+  .chart-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
+  .mini-chart { background: #111; border-radius: 6px; padding: 6px; }
+  .mini-chart-label { color: #777; font-size: 0.65rem; text-transform: uppercase; letter-spacing: 0.5px; margin-bottom: 4px; }
+  .mini-chart svg { width: 100%; height: 55px; display: block; }
+
+  /* Option C: Tabbed mini charts */
+  .tab-row { display: flex; gap: 4px; margin-bottom: 6px; }
+  .tab { background: #1a1a2e; border: 1px solid #333; border-radius: 4px 4px 0 0; padding: 3px 9px; font-size: 0.65rem; color: #888; cursor: default; }
+  .tab.active { background: #2a2a4a; color: #e0e0ff; border-bottom-color: #2a2a4a; }
+  .tab-content { background: #111; border-radius: 0 6px 6px 6px; padding: 8px; }
+  .tab-metrics { display: flex; gap: 8px; margin-top: 6px; }
+  .metric-line { flex: 1; }
+  .metric-line-label { color: #666; font-size: 0.6rem; text-align: center; margin-top: 2px; }
+  .metric-line svg { width: 100%; height: 45px; display: block; }
+</style>
+
+<div class="cards">
+
+  <!-- Option A: Single combined chart -->
+  <div class="card" data-choice="a" onclick="toggleSelect(this)">
+    <div class="card-header">
+      <div class="card-letter">A</div>
+      <div class="card-title">Single Combined Chart <span class="rec-badge">Recommended</span></div>
+    </div>
+    <p class="card-desc">One line chart showing all 4 domain composite t-scores over time on a shared 0–100 scale. Each domain is a separate colored line. Compact — fits in the existing profile without major layout changes.</p>
+    <div class="dark-mockup">
+      <div class="dm-header">Domain T-Score Trends (0–100)</div>
+      <div class="chart-combined">
+        <svg viewBox="0 0 400 100" preserveAspectRatio="none">
+          <!-- Grid lines -->
+          <line x1="0" y1="25" x2="400" y2="25" stroke="#222" stroke-width="1"/>
+          <line x1="0" y1="50" x2="400" y2="50" stroke="#333" stroke-width="1" stroke-dasharray="4,4"/>
+          <line x1="0" y1="75" x2="400" y2="75" stroke="#222" stroke-width="1"/>
+          <!-- CMJ line (blue) -->
+          <polyline points="0,45 60,40 120,35 180,30 240,32 300,28 360,25 400,22" fill="none" stroke="#5865f2" stroke-width="2.5"/>
+          <!-- GPS line (green) -->
+          <polyline points="0,60 60,58 120,55 180,52 240,50 300,48 360,45 400,43" fill="none" stroke="#43b581" stroke-width="2.5"/>
+          <!-- BW line (amber) -->
+          <polyline points="0,70 60,68 120,65 180,67 240,64 300,62 360,60 400,58" fill="none" stroke="#faa61a" stroke-width="2.5"/>
+          <!-- Strength line (red/pink) -->
+          <polyline points="0,55 60,50 120,48 180,44 240,42 300,40 360,38 400,36" fill="none" stroke="#f04747" stroke-width="2.5"/>
+          <!-- Date labels -->
+          <text x="0" y="98" fill="#555" font-size="8">Sep</text>
+          <text x="90" y="98" fill="#555" font-size="8">Oct</text>
+          <text x="190" y="98" fill="#555" font-size="8">Nov</text>
+          <text x="280" y="98" fill="#555" font-size="8">Jan</text>
+          <text x="360" y="98" fill="#555" font-size="8">Mar</text>
+        </svg>
+      </div>
+      <div style="display:flex;gap:14px;margin-top:6px;">
+        <span style="color:#5865f2;font-size:0.65rem;">● CMJ</span>
+        <span style="color:#43b581;font-size:0.65rem;">● GPS</span>
+        <span style="color:#faa61a;font-size:0.65rem;">● Body Wt</span>
+        <span style="color:#f04747;font-size:0.65rem;">● Strength</span>
+      </div>
+    </div>
+    <div style="margin-top:10px;padding-top:10px;border-top:1px solid #2a2a4a;">
+      <strong style="color:#6fcf6f;font-size:0.8rem;">Pros:</strong>
+      <span style="color:#aaa;font-size:0.8rem;"> Compact, shows cross-domain trajectory at a glance, easy to see if athlete is improving overall</span><br>
+      <strong style="color:#f04747;font-size:0.8rem;">Cons:</strong>
+      <span style="color:#aaa;font-size:0.8rem;"> Hides individual metric detail (e.g., which CMJ metric improved?)</span>
+    </div>
+  </div>
+
+  <!-- Option B: 2x2 grid of domain charts -->
+  <div class="card" data-choice="b" onclick="toggleSelect(this)">
+    <div class="card-header">
+      <div class="card-letter">B</div>
+      <div class="card-title">4 Domain Mini Charts (2×2 Grid)</div>
+    </div>
+    <p class="card-desc">Each domain gets its own small chart showing its individual metrics as separate lines. More detailed but requires more vertical space below the existing profile content.</p>
+    <div class="dark-mockup">
+      <div class="chart-grid">
+        <!-- CMJ -->
+        <div class="mini-chart">
+          <div class="mini-chart-label">CMJ</div>
+          <svg viewBox="0 0 160 55" preserveAspectRatio="none">
+            <line x1="0" y1="27" x2="160" y2="27" stroke="#222" stroke-width="1" stroke-dasharray="3,3"/>
+            <polyline points="0,40 40,35 80,28 120,22 160,18" fill="none" stroke="#5865f2" stroke-width="2"/>
+            <polyline points="0,42 40,38 80,33 120,30 160,28" fill="none" stroke="#7289da" stroke-width="1.5" stroke-dasharray="4,2"/>
+            <polyline points="0,38 40,36 80,32 120,29 160,26" fill="none" stroke="#99aab5" stroke-width="1.5" stroke-dasharray="2,3"/>
+          </svg>
+          <div style="display:flex;gap:6px;margin-top:2px;">
+            <span style="color:#5865f2;font-size:0.55rem;">Ht</span>
+            <span style="color:#7289da;font-size:0.55rem;">Pwr</span>
+            <span style="color:#99aab5;font-size:0.55rem;">mRSI</span>
+          </div>
+        </div>
+        <!-- GPS -->
+        <div class="mini-chart">
+          <div class="mini-chart-label">GPS</div>
+          <svg viewBox="0 0 160 55" preserveAspectRatio="none">
+            <line x1="0" y1="27" x2="160" y2="27" stroke="#222" stroke-width="1" stroke-dasharray="3,3"/>
+            <polyline points="0,38 40,35 80,30 120,28 160,25" fill="none" stroke="#43b581" stroke-width="2"/>
+            <polyline points="0,44 40,40 80,38 120,35 160,32" fill="none" stroke="#7ee8a2" stroke-width="1.5" stroke-dasharray="4,2"/>
+            <polyline points="0,35 40,33 80,30 120,27 160,24" fill="none" stroke="#a8e6c4" stroke-width="1.5" stroke-dasharray="2,3"/>
+          </svg>
+          <div style="display:flex;gap:6px;margin-top:2px;">
+            <span style="color:#43b581;font-size:0.55rem;">HSD</span>
+            <span style="color:#7ee8a2;font-size:0.55rem;">Load</span>
+            <span style="color:#a8e6c4;font-size:0.55rem;">MaxV</span>
+          </div>
+        </div>
+        <!-- Body Weight -->
+        <div class="mini-chart">
+          <div class="mini-chart-label">Body Weight</div>
+          <svg viewBox="0 0 160 55" preserveAspectRatio="none">
+            <line x1="0" y1="27" x2="160" y2="27" stroke="#222" stroke-width="1" stroke-dasharray="3,3"/>
+            <polyline points="0,30 40,32 80,35 120,33 160,31" fill="none" stroke="#faa61a" stroke-width="2"/>
+          </svg>
+          <div style="margin-top:2px;"><span style="color:#faa61a;font-size:0.55rem;">Weight (kg)</span></div>
+        </div>
+        <!-- Strength -->
+        <div class="mini-chart">
+          <div class="mini-chart-label">Strength (IMTP)</div>
+          <svg viewBox="0 0 160 55" preserveAspectRatio="none">
+            <line x1="0" y1="27" x2="160" y2="27" stroke="#222" stroke-width="1" stroke-dasharray="3,3"/>
+            <polyline points="0,45 40,40 80,35 120,30 160,26" fill="none" stroke="#f04747" stroke-width="2"/>
+            <polyline points="0,42 40,38 80,33 120,30 160,27" fill="none" stroke="#ff7a7a" stroke-width="1.5" stroke-dasharray="4,2"/>
+            <polyline points="0,44 40,39 80,36 120,32 160,28" fill="none" stroke="#ffaaaa" stroke-width="1.5" stroke-dasharray="2,3"/>
+          </svg>
+          <div style="display:flex;gap:6px;margin-top:2px;">
+            <span style="color:#f04747;font-size:0.55rem;">Pk Force/BM</span>
+            <span style="color:#ff7a7a;font-size:0.55rem;">RFD100</span>
+            <span style="color:#ffaaaa;font-size:0.55rem;">RFD200</span>
+          </div>
+        </div>
+      </div>
+    </div>
+    <div style="margin-top:10px;padding-top:10px;border-top:1px solid #2a2a4a;">
+      <strong style="color:#6fcf6f;font-size:0.8rem;">Pros:</strong>
+      <span style="color:#aaa;font-size:0.8rem;"> Shows individual metric detail per domain, easy to isolate which metric drove change</span><br>
+      <strong style="color:#f04747;font-size:0.8rem;">Cons:</strong>
+      <span style="color:#aaa;font-size:0.8rem;"> Takes significantly more vertical space, harder to compare across domains</span>
+    </div>
+  </div>
+
+  <!-- Option C: Combined + expandable detail -->
+  <div class="card" data-choice="c" onclick="toggleSelect(this)">
+    <div class="card-header">
+      <div class="card-letter">C</div>
+      <div class="card-title">Combined Chart + Click-to-Expand Detail</div>
+    </div>
+    <p class="card-desc">Default view shows the single combined t-score chart (Option A). Clicking a domain name expands it inline to show its individual metric lines. Best of both worlds — compact by default, detailed on demand.</p>
+    <div class="dark-mockup">
+      <div class="dm-header">Domain T-Score Trends — click a domain to expand</div>
+      <div class="chart-combined" style="height:90px;">
+        <svg viewBox="0 0 400 90" preserveAspectRatio="none">
+          <line x1="0" y1="22" x2="400" y2="22" stroke="#222" stroke-width="1"/>
+          <line x1="0" y1="45" x2="400" y2="45" stroke="#333" stroke-width="1" stroke-dasharray="4,4"/>
+          <line x1="0" y1="68" x2="400" y2="68" stroke="#222" stroke-width="1"/>
+          <polyline points="0,40 60,36 120,32 180,27 240,29 300,25 360,22 400,20" fill="none" stroke="#5865f2" stroke-width="2.5"/>
+          <polyline points="0,55 60,53 120,50 180,47 240,46 300,44 360,41 400,39" fill="none" stroke="#43b581" stroke-width="2.5"/>
+          <polyline points="0,63 60,62 120,59 180,60 240,58 300,56 360,54 400,52" fill="none" stroke="#faa61a" stroke-width="2.5"/>
+          <polyline points="0,50 60,45 120,43 180,40 240,38 300,36 360,34 400,32" fill="none" stroke="#f04747" stroke-width="2.5"/>
+        </svg>
+      </div>
+      <!-- Expanded CMJ detail (shows what clicking CMJ looks like) -->
+      <div style="margin-top:8px;border:1px solid #5865f244;border-radius:6px;padding:8px;background:#0d0d1a;">
+        <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:6px;">
+          <span style="color:#5865f2;font-size:0.7rem;font-weight:bold;">▼ CMJ Detail</span>
+          <span style="color:#555;font-size:0.65rem;">click to collapse</span>
+        </div>
+        <svg width="100%" height="45" viewBox="0 0 360 45" preserveAspectRatio="none">
+          <polyline points="0,35 90,28 180,22 270,16 360,12" fill="none" stroke="#5865f2" stroke-width="1.5"/>
+          <polyline points="0,36 90,31 180,27 270,24 360,21" fill="none" stroke="#7289da" stroke-width="1.5" stroke-dasharray="4,2"/>
+          <polyline points="0,33 90,30 180,26 270,23 360,20" fill="none" stroke="#99aab5" stroke-width="1.5" stroke-dasharray="2,3"/>
+        </svg>
+        <div style="display:flex;gap:12px;"><span style="color:#5865f2;font-size:0.6rem;">— Jump Ht</span><span style="color:#7289da;font-size:0.6rem;">- - Pk Pwr</span><span style="color:#99aab5;font-size:0.6rem;">··· mRSI</span></div>
+      </div>
+      <div style="display:flex;gap:8px;margin-top:6px;flex-wrap:wrap;">
+        <span style="color:#5865f2;font-size:0.65rem;cursor:pointer;border:1px solid #5865f244;border-radius:3px;padding:1px 6px;">▼ CMJ</span>
+        <span style="color:#43b581;font-size:0.65rem;cursor:pointer;border:1px solid #43b58144;border-radius:3px;padding:1px 6px;">▶ GPS</span>
+        <span style="color:#faa61a;font-size:0.65rem;cursor:pointer;border:1px solid #faa61a44;border-radius:3px;padding:1px 6px;">▶ Body Wt</span>
+        <span style="color:#f04747;font-size:0.65rem;cursor:pointer;border:1px solid #f0474744;border-radius:3px;padding:1px 6px;">▶ Strength</span>
+      </div>
+    </div>
+    <div style="margin-top:10px;padding-top:10px;border-top:1px solid #2a2a4a;">
+      <strong style="color:#6fcf6f;font-size:0.8rem;">Pros:</strong>
+      <span style="color:#aaa;font-size:0.8rem;"> Compact by default, full detail available on demand — best for daily use where you want a quick overview but can drill in</span><br>
+      <strong style="color:#f04747;font-size:0.8rem;">Cons:</strong>
+      <span style="color:#aaa;font-size:0.8rem;"> More JS complexity to implement</span>
+    </div>
+  </div>
+
+</div>
