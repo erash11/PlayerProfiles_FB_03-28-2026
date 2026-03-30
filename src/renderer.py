@@ -55,6 +55,146 @@ def _add_z_columns(df: pd.DataFrame) -> pd.DataFrame:
     return out
 
 
+def _t_score_val(val, stats: dict):
+    """T-score a single historical value using snapshot population stats."""
+    if stats.get("mean") is None or stats.get("std") is None:
+        return None
+    if val is None:
+        return None
+    try:
+        if math.isnan(float(val)):
+            return None
+    except (TypeError, ValueError):
+        return None
+    z = (float(val) - stats["mean"]) / stats["std"]
+    return round(max(0.0, min(100.0, z * 10 + 50)), 1)
+
+
+def _domain_t(vals: list):
+    """Mean of non-None t-score values, or None if all are missing."""
+    valid = [v for v in vals if v is not None]
+    return round(sum(valid) / len(valid), 1) if valid else None
+
+
+def _gps_rolling(df_athlete: pd.DataFrame) -> pd.DataFrame:
+    """
+    7-day rolling average for a single athlete's GPS sessions.
+    Inserts a null sentinel row for any gap > 21 days so Chart.js renders a break.
+    """
+    df = df_athlete.copy()
+    df["session_date"] = pd.to_datetime(df["session_date"])
+    df = df.sort_values("session_date").set_index("session_date")
+
+    metric_cols = ["hsd_m", "player_load", "max_velocity_ms"]
+    rolled = df[metric_cols].rolling("7D", min_periods=1).mean().reset_index()
+
+    result_rows = []
+    prev_date = None
+    for _, row in rolled.iterrows():
+        if prev_date is not None and (row["session_date"] - prev_date).days > 21:
+            null_row = {"session_date": prev_date + pd.Timedelta(days=(row["session_date"] - prev_date).days // 2)}
+            for col in metric_cols:
+                null_row[col] = None
+            result_rows.append(null_row)
+        result_rows.append(row.to_dict())
+        prev_date = row["session_date"]
+
+    return pd.DataFrame(result_rows)
+
+
+def build_history(athlete_records, cmj_hist, gps_hist, bw_hist, imtp_hist, pop_stats):
+    """
+    Attaches *_history arrays to each athlete dict in athlete_records (in-place).
+    pop_stats keys match snapshot raw column names (e.g. 'avg_hsd_m' for GPS).
+    GPS history uses 7-day rolling average; null sentinel rows mark off-season gaps.
+    """
+    from src.data import _normalize_name
+
+    def _grp(df, col):
+        return df.groupby(col) if not df.empty and col in df.columns else {}
+
+    cmj_grp  = _grp(cmj_hist,  "forcedecks_id")
+    imtp_grp = _grp(imtp_hist, "forcedecks_id")
+    bw_grp   = _grp(bw_hist,   "name_normalized")
+    gps_grp  = _grp(gps_hist,  "catapult_id")
+
+    for rec in athlete_records:
+        fd_id     = rec.get("forcedecks_id")
+        cat_id    = rec.get("catapult_id")
+        name_norm = _normalize_name(rec.get("full_name", ""))
+
+        # ── CMJ ──
+        rec["cmj_history"] = []
+        if fd_id and hasattr(cmj_grp, "groups") and fd_id in cmj_grp.groups:
+            for _, row in cmj_grp.get_group(fd_id).iterrows():
+                jh_t = _t_score_val(row.get("jump_height_cm"), pop_stats.get("jump_height_cm", {}))
+                pp_t = _t_score_val(row.get("peak_power_bm"),  pop_stats.get("peak_power_bm", {}))
+                mr_t = _t_score_val(row.get("mrsi"),           pop_stats.get("mrsi", {}))
+                rec["cmj_history"].append({
+                    "date":            str(row["test_date"])[:10],
+                    "jump_height_cm":  _safe(row.get("jump_height_cm")),
+                    "peak_power_bm":   _safe(row.get("peak_power_bm")),
+                    "mrsi":            _safe(row.get("mrsi")),
+                    "jump_height_t":   jh_t,
+                    "peak_power_bm_t": pp_t,
+                    "mrsi_t":          mr_t,
+                    "cmj_domain_t":    _domain_t([jh_t, pp_t, mr_t]),
+                })
+
+        # ── IMTP ──
+        rec["imtp_history"] = []
+        if fd_id and hasattr(imtp_grp, "groups") and fd_id in imtp_grp.groups:
+            for _, row in imtp_grp.get_group(fd_id).iterrows():
+                pf_t  = _t_score_val(row.get("peak_force_bm"), pop_stats.get("peak_force_bm", {}))
+                r1_t  = _t_score_val(row.get("rfd_100ms"),     pop_stats.get("rfd_100ms", {}))
+                r2_t  = _t_score_val(row.get("rfd_200ms"),     pop_stats.get("rfd_200ms", {}))
+                rec["imtp_history"].append({
+                    "date":             str(row["test_date"])[:10],
+                    "peak_force_n":     _safe(row.get("peak_force_n")),
+                    "peak_force_bm":    _safe(row.get("peak_force_bm")),
+                    "rfd_100ms":        _safe(row.get("rfd_100ms")),
+                    "rfd_200ms":        _safe(row.get("rfd_200ms")),
+                    "peak_force_bm_t":  pf_t,
+                    "rfd_100ms_t":      r1_t,
+                    "rfd_200ms_t":      r2_t,
+                    "str_domain_t":     pf_t,   # Strength domain = peak_force_bm_t only
+                })
+
+        # ── Body Weight ──
+        rec["bw_history"] = []
+        if name_norm and hasattr(bw_grp, "groups") and name_norm in bw_grp.groups:
+            for _, row in bw_grp.get_group(name_norm).iterrows():
+                wt_t = _t_score_val(row.get("weight_kg"), pop_stats.get("weight_kg", {}))
+                rec["bw_history"].append({
+                    "date":        str(row["date"])[:10],
+                    "weight_kg":   _safe(row.get("weight_kg")),
+                    "weight_t":    wt_t,
+                    "bw_domain_t": wt_t,
+                })
+
+        # ── GPS ──
+        rec["gps_history"] = []
+        if cat_id and hasattr(gps_grp, "groups") and cat_id in gps_grp.groups:
+            df_rolled = _gps_rolling(gps_grp.get_group(cat_id))
+            for _, row in df_rolled.iterrows():
+                hsd = row.get("hsd_m")
+                pl  = row.get("player_load")
+                mv  = row.get("max_velocity_ms")
+                hsd_t = _t_score_val(hsd, pop_stats.get("avg_hsd_m", {}))           if hsd is not None else None
+                pl_t  = _t_score_val(pl,  pop_stats.get("avg_player_load", {}))     if pl  is not None else None
+                mv_t  = _t_score_val(mv,  pop_stats.get("avg_max_velocity_ms", {})) if mv  is not None else None
+                rec["gps_history"].append({
+                    "date":             str(row["session_date"])[:10],
+                    "hsd_m":            _safe(hsd) if hsd is not None else None,
+                    "player_load":      _safe(pl)  if pl  is not None else None,
+                    "max_velocity_ms":  _safe(mv)  if mv  is not None else None,
+                    "hsd_t":            hsd_t,
+                    "player_load_t":    pl_t,
+                    "max_vel_t":        mv_t,
+                    "gps_domain_t":     _domain_t([hsd_t, pl_t, mv_t]),
+                })
+
+
 def render(
     df_scored: pd.DataFrame,
     label: str,

@@ -110,3 +110,75 @@ def test_load_bw_history_returns_all_rows():
         assert result["weight_kg"].iloc[0] == pytest.approx(240 * 0.453592, rel=1e-4)
     finally:
         os.unlink(tmp_path)
+
+
+def test_build_history_attaches_empty_lists_when_no_data():
+    from src.renderer import build_history
+
+    athletes = [{"forcedecks_id": "fd1", "catapult_id": None, "full_name": "Alice Smith"}]
+    pop_stats = {
+        "jump_height_cm": {"mean": 65.0, "std": 5.0},
+        "peak_power_bm":  {"mean": 22.0, "std": 2.0},
+        "mrsi":           {"mean": 2.5,  "std": 0.3},
+        "avg_hsd_m":          {"mean": 450.0, "std": 50.0},
+        "avg_player_load":    {"mean": 110.0, "std": 15.0},
+        "avg_max_velocity_ms":{"mean": 8.0,   "std": 0.5},
+        "weight_kg":          {"mean": 90.0,  "std": 10.0},
+        "peak_force_bm":  {"mean": 30.0, "std": 3.0},
+        "peak_force_n":   {"mean": 2700.0,"std": 400.0},
+        "rfd_100ms":      {"mean": 7500.0,"std": 1000.0},
+        "rfd_200ms":      {"mean": 6000.0,"std": 800.0},
+    }
+    empty_df_cmj  = pd.DataFrame(columns=["forcedecks_id", "test_date", "jump_height_cm", "peak_power_bm", "mrsi"])
+    empty_df_imtp = pd.DataFrame(columns=["forcedecks_id", "test_date", "peak_force_n", "peak_force_bm", "rfd_100ms", "rfd_200ms"])
+    empty_df_bw   = pd.DataFrame(columns=["name_normalized", "date", "weight_kg"])
+    empty_df_gps  = pd.DataFrame(columns=["catapult_id", "session_date", "hsd_m", "player_load", "max_velocity_ms"])
+
+    build_history(athletes, empty_df_cmj, empty_df_gps, empty_df_bw, empty_df_imtp, pop_stats)
+
+    assert athletes[0]["cmj_history"]  == []
+    assert athletes[0]["gps_history"]  == []
+    assert athletes[0]["bw_history"]   == []
+    assert athletes[0]["imtp_history"] == []
+
+
+def test_build_history_cmj_t_scores():
+    from src.renderer import build_history
+
+    # pop mean=65, std=5 → jump_height 70 → z=1 → t=60
+    athletes = [{"forcedecks_id": "fd1", "catapult_id": None, "full_name": "Alice Smith"}]
+    pop_stats = {
+        "jump_height_cm": {"mean": 65.0, "std": 5.0},
+        "peak_power_bm":  {"mean": 22.0, "std": 2.0},
+        "mrsi":           {"mean": 2.5,  "std": 0.3},
+        "avg_hsd_m": {"mean": None, "std": None},
+        "avg_player_load": {"mean": None, "std": None},
+        "avg_max_velocity_ms": {"mean": None, "std": None},
+        "weight_kg": {"mean": None, "std": None},
+        "peak_force_bm": {"mean": None, "std": None},
+        "peak_force_n": {"mean": None, "std": None},
+        "rfd_100ms": {"mean": None, "std": None},
+        "rfd_200ms": {"mean": None, "std": None},
+    }
+    cmj_hist = pd.DataFrame([{
+        "forcedecks_id": "fd1",
+        "test_date": "2025-09-05",
+        "jump_height_cm": 70.0,
+        "peak_power_bm": 24.0,
+        "mrsi": 2.8,
+    }])
+    empty = lambda cols: pd.DataFrame(columns=cols)
+
+    build_history(
+        athletes, cmj_hist,
+        empty(["catapult_id","session_date","hsd_m","player_load","max_velocity_ms"]),
+        empty(["name_normalized","date","weight_kg"]),
+        empty(["forcedecks_id","test_date","peak_force_n","peak_force_bm","rfd_100ms","rfd_200ms"]),
+        pop_stats,
+    )
+
+    h = athletes[0]["cmj_history"]
+    assert len(h) == 1
+    assert h[0]["date"] == "2025-09-05"
+    assert h[0]["jump_height_cm"] == pytest.approx(70.0)
+    assert h[0]["jump_height_t"]  == pytest.approx(60.0, abs=0.5)   # z=1 → t=60
