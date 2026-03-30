@@ -80,6 +80,67 @@ def load_cmj(start_date: str, end_date: str) -> pd.DataFrame:
     return result[cols]
 
 
+def load_cmj_history(start_date: str, end_date: str) -> pd.DataFrame:
+    """
+    All CMJ tests per athlete within [start_date, end_date] (not just most recent).
+    Returns: forcedecks_id, test_date, jump_height_cm, peak_power_bm, mrsi
+    Sorted by forcedecks_id, test_date ASC.
+    """
+    conn = duckdb.connect(str(FORCEPLATE_DB), read_only=True)
+
+    all_tests = conn.execute("""
+        SELECT athlete_id, test_id, test_date
+        FROM classified_athletes
+        WHERE test_date BETWEEN ? AND ?
+        ORDER BY athlete_id, test_date
+    """, [start_date, end_date]).df()
+
+    if all_tests.empty:
+        conn.close()
+        return pd.DataFrame(columns=["forcedecks_id", "test_date", "jump_height_cm", "peak_power_bm", "mrsi"])
+
+    test_ids = all_tests["test_id"].tolist()
+    placeholders = ", ".join(["?" for _ in test_ids])
+
+    raw = conn.execute(f"""
+        SELECT test_id, metric_name, metric_value
+        FROM raw_tests
+        WHERE test_id IN ({placeholders})
+          AND metric_name IN ('Jump Height (Imp-Mom)', 'Peak Power / BM')
+    """, test_ids).df()
+
+    classified = conn.execute(f"""
+        SELECT test_id, athlete_id, mrsi
+        FROM classified_athletes
+        WHERE test_id IN ({placeholders})
+    """, test_ids).df()
+
+    conn.close()
+
+    if not raw.empty:
+        raw_wide = raw.pivot_table(
+            index="test_id", columns="metric_name", values="metric_value"
+        ).reset_index()
+        raw_wide.columns.name = None
+        raw_wide = raw_wide.rename(columns={
+            "Jump Height (Imp-Mom)": "jump_height_cm",
+            "Peak Power / BM":       "peak_power_bm",
+        })
+    else:
+        raw_wide = pd.DataFrame(columns=["test_id", "jump_height_cm", "peak_power_bm"])
+
+    result = classified.merge(raw_wide, on="test_id", how="left")
+    result = result.rename(columns={"athlete_id": "forcedecks_id"})
+    result = result.merge(all_tests[["test_id", "test_date"]], on="test_id", how="left")
+
+    cols = ["forcedecks_id", "test_date", "jump_height_cm", "peak_power_bm", "mrsi"]
+    for c in cols:
+        if c not in result.columns:
+            result[c] = float("nan")
+
+    return result[cols].sort_values(["forcedecks_id", "test_date"]).reset_index(drop=True)
+
+
 def load_gps(start_date: str, end_date: str) -> pd.DataFrame:
     """
     Average GPS metrics per athlete across all sessions in [start_date, end_date].
@@ -96,6 +157,31 @@ def load_gps(start_date: str, end_date: str) -> pd.DataFrame:
         FROM athlete_sessions
         WHERE session_date BETWEEN ? AND ?
         GROUP BY athlete_id
+    """, [start_date, end_date]).df()
+
+    conn.close()
+    return result
+
+
+def load_gps_history(start_date: str, end_date: str) -> pd.DataFrame:
+    """
+    Per-session GPS data for all athletes in [start_date, end_date].
+    Column rename: high_speed_distance_m -> hsd_m, total_player_load -> player_load.
+    Returns: catapult_id, session_date, hsd_m, player_load, max_velocity_ms
+    Sorted by catapult_id, session_date ASC.
+    """
+    conn = duckdb.connect(str(GPS_DB), read_only=True)
+
+    result = conn.execute("""
+        SELECT
+            athlete_id            AS catapult_id,
+            session_date,
+            high_speed_distance_m AS hsd_m,
+            total_player_load     AS player_load,
+            max_velocity_ms
+        FROM athlete_sessions
+        WHERE session_date BETWEEN ? AND ?
+        ORDER BY athlete_id, session_date
     """, [start_date, end_date]).df()
 
     conn.close()
@@ -134,6 +220,39 @@ def load_bodyweight(end_date: str) -> pd.DataFrame:
     df = df.drop_duplicates(subset="name_normalized", keep="first")
 
     return df[["name_normalized", "weight_kg"]]
+
+
+def load_bw_history(end_date: str) -> pd.DataFrame:
+    """
+    All body weight entries per athlete on or before end_date (not just most recent).
+    Returns: name_normalized, date, weight_kg
+    Sorted by name_normalized, date ASC.
+    """
+    df = pd.read_csv(BODYWEIGHT_CSV)
+    df.columns = [c.strip().upper() for c in df.columns]
+    df["DATE"] = pd.to_datetime(df["DATE"], format="%m/%d/%Y", errors="coerce")
+    df = df.dropna(subset=["DATE"])
+    df = df[df["DATE"] <= pd.Timestamp(end_date)]
+
+    if df.empty:
+        return pd.DataFrame(columns=["name_normalized", "date", "weight_kg"])
+
+    def flip_name(raw):
+        raw = str(raw).strip().strip('"')
+        if "," in raw:
+            parts = raw.split(",", 1)
+            return f"{parts[1].strip()} {parts[0].strip()}"
+        return raw
+
+    df["full_name"] = df["NAME"].apply(flip_name)
+    df["name_normalized"] = df["full_name"].apply(_normalize_name)
+    df["weight_kg"] = pd.to_numeric(df["WEIGHT"], errors="coerce") * 0.453592
+    df = df.rename(columns={"DATE": "date"})
+    df = df.dropna(subset=["weight_kg"])
+
+    return df[["name_normalized", "date", "weight_kg"]].sort_values(
+        ["name_normalized", "date"]
+    ).reset_index(drop=True)
 
 
 def load_imtp(start_date: str, end_date: str) -> pd.DataFrame:
@@ -204,6 +323,72 @@ def load_imtp(start_date: str, end_date: str) -> pd.DataFrame:
             result[c] = float("nan")
 
     return result[cols]
+
+
+def load_imtp_history(start_date: str, end_date: str) -> pd.DataFrame:
+    """
+    All IMTP tests per athlete within [start_date, end_date].
+    Returns: forcedecks_id, test_date, peak_force_n, peak_force_bm, rfd_100ms, rfd_200ms
+    Sorted by forcedecks_id, test_date ASC.
+    """
+    conn = duckdb.connect(str(FORCEPLATE_DB), read_only=True)
+
+    tables = conn.execute("SHOW TABLES").df()
+    if "imtp_tests" not in tables["name"].tolist():
+        conn.close()
+        return pd.DataFrame(columns=["forcedecks_id", "test_date", "peak_force_n", "peak_force_bm", "rfd_100ms", "rfd_200ms"])
+
+    all_tests = conn.execute("""
+        SELECT DISTINCT athlete_id, test_id, test_date
+        FROM imtp_tests
+        WHERE test_date BETWEEN ? AND ?
+        ORDER BY athlete_id, test_date
+    """, [start_date, end_date]).df()
+
+    if all_tests.empty:
+        conn.close()
+        return pd.DataFrame(columns=["forcedecks_id", "test_date", "peak_force_n", "peak_force_bm", "rfd_100ms", "rfd_200ms"])
+
+    test_ids = all_tests["test_id"].tolist()
+    placeholders = ", ".join(["?" for _ in test_ids])
+
+    raw = conn.execute(f"""
+        SELECT test_id, metric_name, metric_value
+        FROM imtp_tests
+        WHERE test_id IN ({placeholders})
+          AND metric_name IN (
+              'Peak Vertical Force',
+              'Peak Vertical Force / BM',
+              'RFD - 100ms',
+              'RFD - 200ms'
+          )
+    """, test_ids).df()
+
+    conn.close()
+
+    if raw.empty:
+        return pd.DataFrame(columns=["forcedecks_id", "test_date", "peak_force_n", "peak_force_bm", "rfd_100ms", "rfd_200ms"])
+
+    raw_wide = raw.pivot_table(
+        index="test_id", columns="metric_name", values="metric_value"
+    ).reset_index()
+    raw_wide.columns.name = None
+    raw_wide = raw_wide.rename(columns={
+        "Peak Vertical Force":      "peak_force_n",
+        "Peak Vertical Force / BM": "peak_force_bm",
+        "RFD - 100ms":              "rfd_100ms",
+        "RFD - 200ms":              "rfd_200ms",
+    })
+
+    result = all_tests.merge(raw_wide, on="test_id", how="left")
+    result = result.rename(columns={"athlete_id": "forcedecks_id"})
+
+    cols = ["forcedecks_id", "test_date", "peak_force_n", "peak_force_bm", "rfd_100ms", "rfd_200ms"]
+    for c in cols:
+        if c not in result.columns:
+            result[c] = float("nan")
+
+    return result[cols].sort_values(["forcedecks_id", "test_date"]).reset_index(drop=True)
 
 
 def merge_all(start_date: str, end_date: str) -> pd.DataFrame:

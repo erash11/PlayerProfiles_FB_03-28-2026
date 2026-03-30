@@ -83,3 +83,30 @@ def test_load_bw_history_columns():
 def test_load_gps_history_columns():
     from src.data import load_gps_history
     assert callable(load_gps_history)
+
+
+def test_load_bw_history_returns_all_rows():
+    """BW history must return more rows than the snapshot (which deduplicates to 1 per athlete)."""
+    import tempfile, os
+    import pandas as pd
+    from unittest.mock import patch
+    from src.data import load_bw_history
+
+    csv_content = """DATE,NAME,WEIGHT,POS
+09/01/2025,"Smith, John",200,WR
+10/01/2025,"Smith, John",198,WR
+11/01/2025,"Smith, John",197,WR
+09/01/2025,"Jones, Bob",240,OL
+"""
+    with tempfile.NamedTemporaryFile(mode="w", suffix=".csv", delete=False) as f:
+        f.write(csv_content)
+        tmp_path = f.name
+
+    try:
+        with patch("src.data.BODYWEIGHT_CSV", tmp_path):
+            result = load_bw_history("2025-12-31")
+        assert len(result) == 4, f"Expected 4 rows, got {len(result)}"
+        assert set(result.columns) == {"name_normalized", "date", "weight_kg"}
+        assert result["weight_kg"].iloc[0] == pytest.approx(240 * 0.453592, rel=1e-4)
+    finally:
+        os.unlink(tmp_path)
