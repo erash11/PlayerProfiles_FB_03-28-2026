@@ -21,6 +21,10 @@ _Z_MAP = {
     "avg_player_load":     "player_load_z",
     "avg_max_velocity_ms": "max_vel_z",
     "weight_kg":           "weight_z",
+    "peak_force_bm":       "peak_force_bm_z",
+    "peak_force_n":        "peak_force_n_z",
+    "rfd_100ms":           "rfd_100ms_z",
+    "rfd_200ms":           "rfd_200ms_z",
 }
 
 
@@ -64,11 +68,14 @@ def render(
         "full_name", "jersey_number", "position", "catapult_id", "forcedecks_id",
         "jump_height_cm", "peak_power_bm", "mrsi",
         "avg_hsd_m", "avg_player_load", "avg_max_velocity_ms", "weight_kg",
+        "peak_force_n", "peak_force_bm", "rfd_100ms", "rfd_200ms",
         "jump_height_t", "peak_power_bm_t", "mrsi_t",
         "hsd_t", "player_load_t", "max_vel_t", "weight_t",
+        "peak_force_bm_t", "peak_force_n_t", "rfd_100ms_t", "rfd_200ms_t",
         "jump_height_z", "peak_power_bm_z", "mrsi_z",
         "hsd_z", "player_load_z", "max_vel_z", "weight_z",
-        "cmj_domain", "gps_domain", "bw_domain",
+        "peak_force_bm_z", "peak_force_n_z", "rfd_100ms_z", "rfd_200ms_z",
+        "cmj_domain", "gps_domain", "bw_domain", "strength_domain",
         "tsa_score", "tsa_rank", "rag", "missing_domains",
     ]
     # Only include columns that exist
@@ -93,13 +100,15 @@ def render(
     numeric_cols = [
         "jump_height_cm", "peak_power_bm", "mrsi",
         "avg_hsd_m", "avg_player_load", "avg_max_velocity_ms", "weight_kg",
+        "peak_force_n", "peak_force_bm", "rfd_100ms", "rfd_200ms",
     ]
     team_avg = {c: _safe(df[c].mean()) if c in df.columns else None for c in numeric_cols}
 
     # Coverage counts
-    cmj_count = int(df["jump_height_cm"].notna().sum()) if "jump_height_cm" in df.columns else 0
-    gps_count = int(df["avg_hsd_m"].notna().sum())       if "avg_hsd_m" in df.columns else 0
-    bw_count  = int(df["weight_kg"].notna().sum())        if "weight_kg" in df.columns else 0
+    cmj_count  = int(df["jump_height_cm"].notna().sum()) if "jump_height_cm" in df.columns else 0
+    gps_count  = int(df["avg_hsd_m"].notna().sum())      if "avg_hsd_m" in df.columns else 0
+    bw_count   = int(df["weight_kg"].notna().sum())       if "weight_kg" in df.columns else 0
+    imtp_count = int(df["peak_force_bm"].notna().sum())   if "peak_force_bm" in df.columns else 0
 
     positions = sorted(df["position"].dropna().unique().tolist())
 
@@ -117,5 +126,6 @@ def render(
         cmj_count=cmj_count,
         gps_count=gps_count,
         bw_count=bw_count,
+        imtp_count=imtp_count,
         positions=positions,
     )

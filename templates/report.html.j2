@@ -147,6 +147,7 @@
       <span class="pill ok">CMJ {{ cmj_count }} athletes</span>
       <span class="pill {% if gps_count > 0 %}ok{% endif %}">GPS {{ gps_count }} athletes</span>
       <span class="pill {% if bw_count > 0 %}ok{% endif %}">BW {{ bw_count }} athletes</span>
+      <span class="pill {% if imtp_count > 0 %}ok{% endif %}">IMTP {{ imtp_count }} athletes</span>
     </div>
   </div>
 
@@ -180,6 +181,7 @@
           <th onclick="sortTable('cmj_domain')" id="th-cmj_domain">CMJ</th>
           <th onclick="sortTable('gps_domain')" id="th-gps_domain">GPS</th>
           <th onclick="sortTable('bw_domain')" id="th-bw_domain">BW</th>
+          <th onclick="sortTable('strength_domain')" id="th-strength_domain">Strength</th>
           <th>RAG</th>
         </tr>
       </thead>
@@ -204,15 +206,19 @@ const TEAM_AVG = {
   avg_player_load:     {{ team_avg.avg_player_load | round(1) }},
   avg_max_velocity_ms: {{ team_avg.avg_max_velocity_ms | round(2) }},
   weight_kg:           {{ team_avg.weight_kg | round(1) }},
+  peak_force_bm:       {{ team_avg.peak_force_bm | default(0) | round(2) }},
+  peak_force_n:        {{ team_avg.peak_force_n  | default(0) | round(0) }},
+  rfd_100ms:           {{ team_avg.rfd_100ms     | default(0) | round(0) }},
+  rfd_200ms:           {{ team_avg.rfd_200ms     | default(0) | round(0) }},
 };
 
 const SPIDER_LABELS = [
   "Jump Height", "Peak Power/BM", "mRSI",
-  "High Speed Dist", "Player Load", "Max Velocity", "Body Weight"
+  "High Speed Dist", "Player Load", "Max Velocity", "Body Weight", "Peak Force/BM"
 ];
 const SPIDER_T_KEYS = [
   "jump_height_t","peak_power_bm_t","mrsi_t",
-  "hsd_t","player_load_t","max_vel_t","weight_t"
+  "hsd_t","player_load_t","max_vel_t","weight_t","peak_force_bm_t"
 ];
 
 // ── Sort state ──
@@ -232,10 +238,11 @@ function tClass(z) {
 
 function renderRow(a) {
   const jerseyHtml = a.jersey_number ? `<span class="jersey">#${a.jersey_number}</span>` : "";
-  const cmjHtml  = a.cmj_domain != null ? fmt(a.cmj_domain) : '<span class="val-na">—</span>';
-  const gpsHtml  = a.gps_domain != null ? fmt(a.gps_domain) : '<span class="val-na">—</span>';
-  const bwHtml   = a.bw_domain  != null ? fmt(a.bw_domain)  : '<span class="val-na">—</span>';
-  const tsaHtml  = a.tsa_score  != null ? fmt(a.tsa_score)  : '<span class="val-na">—</span>';
+  const cmjHtml      = a.cmj_domain      != null ? fmt(a.cmj_domain)      : '<span class="val-na">—</span>';
+  const gpsHtml      = a.gps_domain      != null ? fmt(a.gps_domain)      : '<span class="val-na">—</span>';
+  const bwHtml       = a.bw_domain       != null ? fmt(a.bw_domain)       : '<span class="val-na">—</span>';
+  const strengthHtml = a.strength_domain != null ? fmt(a.strength_domain) : '<span class="val-na">—</span>';
+  const tsaHtml      = a.tsa_score       != null ? fmt(a.tsa_score)       : '<span class="val-na">—</span>';
 
   return `
     <tr class="athlete-row" data-id="${a.forcedecks_id}" data-pos="${a.position}" data-rag="${a.rag}"
@@ -247,10 +254,11 @@ function renderRow(a) {
       <td class="domain-cell">${cmjHtml}</td>
       <td class="domain-cell">${gpsHtml}</td>
       <td class="domain-cell">${bwHtml}</td>
+      <td class="domain-cell">${strengthHtml}</td>
       <td class="rag-cell"><span class="rag ${a.rag}"></span></td>
     </tr>
     <tr class="profile-row" id="profile-${a.forcedecks_id}">
-      <td colspan="8" class="profile-panel" id="panel-${a.forcedecks_id}"></td>
+      <td colspan="9" class="profile-panel" id="panel-${a.forcedecks_id}"></td>
     </tr>`;
 }
 
@@ -268,6 +276,12 @@ function buildMetricsTable(a) {
     ]},
     { section: "Body Weight", metrics: [
       { label: "Weight",  raw: fmt(a.weight_kg, 1)+" kg",  z: a.weight_z,  t: a.weight_t,  avg: fmt(TEAM_AVG.weight_kg, 1)+" kg" },
+    ]},
+    { section: "Strength (IMTP)", metrics: [
+      { label: "Peak Force/BM", raw: fmt(a.peak_force_bm, 2)+" N/kg", z: a.peak_force_bm_z, t: a.peak_force_bm_t, avg: fmt(TEAM_AVG.peak_force_bm, 2)+" N/kg" },
+      { label: "Peak Force",    raw: fmt(a.peak_force_n, 0)+" N",     z: a.peak_force_n_z,  t: a.peak_force_n_t,  avg: fmt(TEAM_AVG.peak_force_n, 0)+" N" },
+      { label: "RFD 0–100ms",   raw: fmt(a.rfd_100ms, 0)+" N/s",     z: a.rfd_100ms_z,     t: a.rfd_100ms_t,     avg: fmt(TEAM_AVG.rfd_100ms, 0)+" N/s" },
+      { label: "RFD 0–200ms",   raw: fmt(a.rfd_200ms, 0)+" N/s",     z: a.rfd_200ms_z,     t: a.rfd_200ms_t,     avg: fmt(TEAM_AVG.rfd_200ms, 0)+" N/s" },
     ]},
   ];
 

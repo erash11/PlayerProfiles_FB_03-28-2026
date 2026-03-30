@@ -29,6 +29,7 @@ def main():
     print(f"  CMJ coverage:     {df['jump_height_cm'].notna().sum()}/{len(df)}")
     print(f"  GPS coverage:     {df['avg_hsd_m'].notna().sum()}/{len(df)}")
     print(f"  BW  coverage:     {df['weight_kg'].notna().sum()}/{len(df)}")
+    print(f"  IMTP coverage:    {df['peak_force_bm'].notna().sum()}/{len(df)}")
 
     print("Scoring …")
     df_scored = score(df)

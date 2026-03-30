@@ -12,11 +12,17 @@ _METRICS = {
     "avg_player_load":     "player_load_t",
     "avg_max_velocity_ms": "max_vel_t",
     "weight_kg":           "weight_t",
+    # IMTP — peak_force_bm drives the Strength domain; rfd metrics are display-only
+    "peak_force_bm":       "peak_force_bm_t",
+    "peak_force_n":        "peak_force_n_t",
+    "rfd_100ms":           "rfd_100ms_t",
+    "rfd_200ms":           "rfd_200ms_t",
 }
 
-_CMJ_T  = ["jump_height_t", "peak_power_bm_t", "mrsi_t"]
-_GPS_T  = ["hsd_t", "player_load_t", "max_vel_t"]
-_BW_T   = ["weight_t"]
+_CMJ_T      = ["jump_height_t", "peak_power_bm_t", "mrsi_t"]
+_GPS_T      = ["hsd_t", "player_load_t", "max_vel_t"]
+_BW_T       = ["weight_t"]
+_STRENGTH_T = ["peak_force_bm_t"]
 
 
 def _z_to_t(series: pd.Series) -> pd.Series:
@@ -40,12 +46,13 @@ def score(df: pd.DataFrame) -> pd.DataFrame:
         out[t_col] = _z_to_t(out[raw_col])
 
     # Domain composites — mean of available t-scores in that domain
-    out["cmj_domain"] = out[_CMJ_T].mean(axis=1, skipna=False)
-    out["gps_domain"] = out[_GPS_T].mean(axis=1, skipna=False)
-    out["bw_domain"]  = out[_BW_T].mean(axis=1, skipna=False)
+    out["cmj_domain"]      = out[_CMJ_T].mean(axis=1, skipna=False)
+    out["gps_domain"]      = out[_GPS_T].mean(axis=1, skipna=False)
+    out["bw_domain"]       = out[_BW_T].mean(axis=1, skipna=False)
+    out["strength_domain"] = out[_STRENGTH_T].mean(axis=1, skipna=False)
 
     # TSA = mean of available domains (at least 1 required)
-    domain_cols = ["cmj_domain", "gps_domain", "bw_domain"]
+    domain_cols = ["cmj_domain", "gps_domain", "bw_domain", "strength_domain"]
     out["tsa_score"] = out[domain_cols].mean(axis=1, skipna=True)
 
     # Rank (1 = highest TSA)
@@ -64,9 +71,10 @@ def score(df: pd.DataFrame) -> pd.DataFrame:
     missing = []
     for _, row in out.iterrows():
         domains = []
-        if pd.isna(row["cmj_domain"]): domains.append("CMJ")
-        if pd.isna(row["gps_domain"]): domains.append("GPS")
-        if pd.isna(row["bw_domain"]):  domains.append("BW")
+        if pd.isna(row["cmj_domain"]):      domains.append("CMJ")
+        if pd.isna(row["gps_domain"]):      domains.append("GPS")
+        if pd.isna(row["bw_domain"]):       domains.append("BW")
+        if pd.isna(row["strength_domain"]): domains.append("Strength")
         missing.append(", ".join(domains))
     out["missing_domains"] = missing
 

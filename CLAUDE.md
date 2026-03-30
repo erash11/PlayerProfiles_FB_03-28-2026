@@ -36,11 +36,11 @@ python generate_report.py --start 2025-09-01 --end 2026-03-28 --label "Spring 20
 generate_report.py      # CLI entry: argparse -> data -> score -> render -> write HTML
 config.py               # absolute paths to all 4 data sources + output dir
 src/
-  data.py               # load_cmj(), load_gps(), load_bodyweight(), merge_all()
+  data.py               # load_cmj(), load_gps(), load_bodyweight(), load_imtp(), merge_all()
   scorer.py             # z->t per metric, domain composites, TSA, RAG
   renderer.py           # serialize DataFrame to JSON, render Jinja2 template
 templates/
-  report.html.j2        # dark-theme HTML: Chart.js radar + sortable table + inline JS
+  report.html.j2        # dark-theme HTML: Chart.js radar (8 axes) + sortable table + inline JS
 data/
   athlete_roster.csv    # 98 active athletes: full_name, jersey_number, position, catapult_id, forcedecks_id
 output/                 # generated HTML files (not committed)
@@ -55,9 +55,11 @@ output/                 # generated HTML files (not committed)
 | Body Weight CSV | `C:/Users/eric_rash/Desktop/DEV/Football/BodWeightWeb/BodyWeightMaster.csv` |
 | Roster crosswalk | `data/athlete_roster.csv` |
 
+**ForcePlate DB tables used:** `raw_tests` (CMJ metrics), `classified_athletes` (mRSI + CMJ classification), `imtp_tests` (IMTP metrics). IMTP data is ingested via the ForcePlate pipeline (`ForcePlate_DecisionSystem/src/ingest/pipeline.py`).
+
 **All paths are defined in `config.py`.** Change them there if pipelines move.
 
-## TSA Scoring (7 axes)
+## TSA Scoring (8 axes, 4 domains)
 
 | Domain | Metric | Source | Field |
 |--------|--------|--------|-------|
@@ -68,12 +70,15 @@ output/                 # generated HTML files (not committed)
 | GPS | Player Load | `athlete_sessions` | `total_player_load` |
 | GPS | Max Velocity (m/s) | `athlete_sessions` | `max_velocity_ms` |
 | BW  | Body Weight (kg) | `BodyWeightMaster.csv` | WEIGHT x 0.453592 |
+| Strength | Peak Force / BM (N/kg) | `imtp_tests` | `"Peak Vertical Force / BM"` |
 
-**Scoring:** z-score per metric (population = all athletes with that metric) -> t-score (z*10+50, clipped 0-100) -> domain mean (CMJ avg of 3, GPS avg of 3, BW = weight_t) -> TSA = mean of available domains.
+**Display-only IMTP metrics** (shown in profile panel, not in TSA domain score): Peak Force (N), RFD 0–100ms (N/s), RFD 0–200ms (N/s).
+
+**Scoring:** z-score per metric (population = all athletes with that metric) -> t-score (z*10+50, clipped 0-100) -> domain mean (CMJ avg of 3, GPS avg of 3, BW = weight_t, Strength = peak_force_bm_t) -> TSA = mean of available domains.
 
 **RAG:** roster-relative -- top 33% green, middle 34% amber, bottom 33% red.
 
-**Missing domain handling:** athletes missing GPS or BW still get a TSA from available domains; a note appears in their profile panel.
+**Missing domain handling:** athletes missing any domain still get a TSA from available domains; a note appears in their profile panel.
 
 ## Athlete Roster
 
