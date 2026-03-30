@@ -402,6 +402,209 @@ function buildTrendsSection(a) {
     </div>`;
 }
 
+function _trendDateMs(dateStr) {
+  // Parse "YYYY-MM-DD" without timezone shift
+  if (!dateStr) return null;
+  const [y, m, d] = dateStr.split("-").map(Number);
+  return new Date(y, m - 1, d).getTime();
+}
+
+function _trendAxisDefaults() {
+  return {
+    x: {
+      type: "linear",
+      ticks: {
+        color: "#475569",
+        font: { size: 10 },
+        callback: (val) => {
+          const d = new Date(val);
+          return d.toLocaleDateString("en-US", { month: "short", day: "numeric" });
+        },
+        maxTicksLimit: 8,
+      },
+      grid: { color: "#1e293b" },
+    },
+    y: {
+      ticks: { color: "#475569", font: { size: 10 } },
+      grid: { color: "#1e293b" },
+    },
+  };
+}
+
+function _trendTooltipDefaults() {
+  return {
+    backgroundColor: "#1e293b",
+    titleColor: "#94a3b8",
+    bodyColor: "#e2e8f0",
+    borderColor: "#334155",
+    borderWidth: 1,
+    padding: 8,
+  };
+}
+
+function drawCombinedTrend(a) {
+  const canvasId = `trend-combined-${a.forcedecks_id}`;
+  const ctx = document.getElementById(canvasId);
+  if (!ctx) return;
+
+  const datasets = TREND_DOMAIN_CFG
+    .filter(d => a[d.histKey] && a[d.histKey].length > 0)
+    .map(d => ({
+      label: d.label,
+      data: a[d.histKey].map(pt => ({
+        x: _trendDateMs(pt.date),
+        y: pt[d.domainT] ?? null,
+      })),
+      borderColor: d.color,
+      backgroundColor: "transparent",
+      borderWidth: 2.5,
+      pointRadius: 3,
+      pointHoverRadius: 5,
+      tension: 0.3,
+      spanGaps: false,
+    }));
+
+  if (!datasets.length) return;
+
+  const axes = _trendAxisDefaults();
+  axes.y = {
+    ...axes.y,
+    title: { display: true, text: "T-Score", color: "#475569", font: { size: 10 } },
+  };
+
+  activeCharts[canvasId] = new Chart(ctx, {
+    type: "line",
+    data: { datasets },
+    options: {
+      responsive: true,
+      animation: false,
+      parsing: false,
+      scales: axes,
+      plugins: {
+        legend: { labels: { color: "#94a3b8", font: { size: 11 }, boxWidth: 12 } },
+        tooltip: {
+          ..._trendTooltipDefaults(),
+          callbacks: {
+            title: (items) => {
+              const d = new Date(items[0].parsed.x);
+              return d.toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" });
+            },
+            label: (item) => ` ${item.dataset.label}: t = ${item.parsed.y ?? "—"}`,
+          },
+        },
+      },
+    },
+  });
+}
+
+const TREND_DETAIL_METRICS = {
+  cmj: [
+    { key: "jump_height_cm",  tKey: "jump_height_t",   label: "Jump Height (cm)",     color: "#6366f1", dash: [] },
+    { key: "peak_power_bm",   tKey: "peak_power_bm_t", label: "Peak Power/BM (W/kg)", color: "#818cf8", dash: [5, 3] },
+    { key: "mrsi",            tKey: "mrsi_t",           label: "mRSI",                 color: "#a5b4fc", dash: [2, 4] },
+  ],
+  gps: [
+    { key: "hsd_m",           tKey: "hsd_t",           label: "HSD (m)",              color: "#22c55e", dash: [] },
+    { key: "player_load",     tKey: "player_load_t",   label: "Player Load",          color: "#4ade80", dash: [5, 3] },
+    { key: "max_velocity_ms", tKey: "max_vel_t",       label: "Max Velocity (m/s)",   color: "#86efac", dash: [2, 4] },
+  ],
+  bw: [
+    { key: "weight_kg",       tKey: "weight_t",        label: "Weight (kg)",          color: "#f59e0b", dash: [] },
+  ],
+  imtp: [
+    { key: "peak_force_bm",   tKey: "peak_force_bm_t", label: "Peak Force/BM (N/kg)", color: "#ef4444", dash: [] },
+    { key: "rfd_100ms",       tKey: "rfd_100ms_t",     label: "RFD 0\u2013100ms (N/s)",    color: "#f87171", dash: [5, 3] },
+    { key: "rfd_200ms",       tKey: "rfd_200ms_t",     label: "RFD 0\u2013200ms (N/s)",    color: "#fca5a5", dash: [2, 4] },
+  ],
+};
+
+function drawDetailChart(a, domainKey) {
+  const canvasId = `trend-${domainKey}-${a.forcedecks_id}`;
+  const ctx = document.getElementById(canvasId);
+  if (!ctx) return;
+
+  const cfg = TREND_DOMAIN_CFG.find(d => d.key === domainKey);
+  const metricDefs = TREND_DETAIL_METRICS[domainKey] || [];
+  const history = a[cfg.histKey] || [];
+
+  const datasets = metricDefs.map(m => ({
+    label: m.label,
+    data: history.map(pt => ({
+      x: _trendDateMs(pt.date),
+      y: pt[m.key] ?? null,
+    })),
+    borderColor: m.color,
+    backgroundColor: "transparent",
+    borderWidth: 2,
+    pointRadius: 3,
+    pointHoverRadius: 5,
+    tension: 0.3,
+    spanGaps: false,
+    borderDash: m.dash,
+  }));
+
+  // Build t-score lookup for tooltip
+  const tLookup = metricDefs.map(m =>
+    history.map(pt => pt[m.tKey] ?? null)
+  );
+
+  const axes = _trendAxisDefaults();
+
+  if (activeCharts[canvasId]) { activeCharts[canvasId].destroy(); delete activeCharts[canvasId]; }
+
+  activeCharts[canvasId] = new Chart(ctx, {
+    type: "line",
+    data: { datasets },
+    options: {
+      responsive: true,
+      animation: false,
+      parsing: false,
+      scales: axes,
+      plugins: {
+        legend: { labels: { color: "#94a3b8", font: { size: 11 }, boxWidth: 12 } },
+        tooltip: {
+          ..._trendTooltipDefaults(),
+          callbacks: {
+            title: (items) => {
+              const d = new Date(items[0].parsed.x);
+              return d.toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" });
+            },
+            label: (item) => {
+              const mIdx = item.datasetIndex;
+              const ptIdx = history.findIndex(pt => _trendDateMs(pt.date) === item.parsed.x);
+              const t = ptIdx >= 0 ? tLookup[mIdx][ptIdx] : null;
+              const tStr = t !== null ? `  (t = ${t})` : "";
+              const yVal = item.parsed.y !== null ? (+item.parsed.y).toFixed(2) : "—";
+              return ` ${item.dataset.label}: ${yVal}${tStr}`;
+            },
+          },
+        },
+      },
+    },
+  });
+}
+
+function drawTrendCharts(a) {
+  drawCombinedTrend(a);
+  // Detail charts are drawn on first expand — not pre-drawn
+}
+
+function toggleTrendDomain(domainKey, athleteId) {
+  const detailEl = document.getElementById(`tdetail-${domainKey}-${athleteId}`);
+  const btnEl    = document.getElementById(`tbtn-${domainKey}-${athleteId}`);
+  if (!detailEl || !btnEl) return;
+
+  const isOpen = detailEl.classList.contains("open");
+  detailEl.classList.toggle("open", !isOpen);
+  btnEl.classList.toggle("active", !isOpen);
+
+  if (!isOpen) {
+    // Draw detail chart on first expand
+    const a = ATHLETES.find(x => x.forcedecks_id === athleteId);
+    if (a) requestAnimationFrame(() => drawDetailChart(a, domainKey));
+  }
+}
+
 function drawSpider(a) {
   const canvasId = `chart-${a.forcedecks_id}`;
   if (activeCharts[canvasId]) {
@@ -474,6 +677,10 @@ function toggleProfile(id) {
     const pid = r.id.replace("profile-", "");
     const chartId = `chart-${pid}`;
     if (activeCharts[chartId]) { activeCharts[chartId].destroy(); delete activeCharts[chartId]; }
+    ["trend-combined", "trend-cmj", "trend-gps", "trend-bw", "trend-imtp"].forEach(prefix => {
+      const tid = `${prefix}-${pid}`;
+      if (activeCharts[tid]) { activeCharts[tid].destroy(); delete activeCharts[tid]; }
+    });
     document.querySelector(`tr[data-id="${pid}"]`)?.classList.remove("expanded");
   });
 
@@ -483,7 +690,10 @@ function toggleProfile(id) {
     panel.innerHTML = buildProfile(a);
     profileRow.classList.add("open");
     athleteRow.classList.add("expanded");
-    requestAnimationFrame(() => drawSpider(a));
+    requestAnimationFrame(() => {
+      drawSpider(a);
+      drawTrendCharts(a);
+    });
   }
 }
 
@@ -520,6 +730,10 @@ function applyFilters() {
     const pid = r.id.replace("profile-", "");
     const chartId = `chart-${pid}`;
     if (activeCharts[chartId]) { activeCharts[chartId].destroy(); delete activeCharts[chartId]; }
+    ["trend-combined", "trend-cmj", "trend-gps", "trend-bw", "trend-imtp"].forEach(prefix => {
+      const tid = `${prefix}-${pid}`;
+      if (activeCharts[tid]) { activeCharts[tid].destroy(); delete activeCharts[tid]; }
+    });
   });
   renderTable(currentFiltered());
 }
