@@ -17,6 +17,7 @@ A Python-based static HTML report generator. Run `generate_report.py` before a m
 - `templates/report.html.j2` — self-contained HTML (dark theme, Chart.js, vanilla JS)
 - `data/athlete_roster.csv` — crosswalk of 98 active athletes
 - `requirements.txt` — duckdb, pandas, numpy, jinja2
+- `tests/test_history.py`  — unit tests for history loaders, pop_stats, build_history
 
 **Original spec (React + FastAPI) was replaced** in favor of a simpler static HTML generator. The spec files (TECH_SPEC.md, UI_WIREFRAMES.md, etc.) are still present for reference but no longer reflect the implementation.
 
@@ -79,7 +80,7 @@ A Python-based static HTML report generator. Run `generate_report.py` before a m
 1. **Jersey numbers blank** — fill `data/athlete_roster.csv` manually for UI display.
 2. **15 FP-only athletes have no catapult_id** — add when they're set up in GPS system.
 3. **BW fallback** — could use `"Bodyweight in Kilograms"` from ForceDecks `raw_tests` when CSV has no match.
-4. **Dual y-axes in trend detail charts** — RFD (N/s) and Peak Force/BM (N/kg) share a single y-axis in the Strength detail chart; GPS metrics also have mixed scales. Add secondary y-axis in a future pass.
+4. **Trend chart dual y-axes** — CMJ, GPS, and Strength detail charts show all metrics on a single y-axis. Metrics within Strength (N/kg vs N/s) have very different scales; add secondary y-axis in a future pass.
 5. **Athlete comparison panel** — not yet implemented. Deferred.
 6. **Position-specific normalization** — v1 uses full-roster z-scores. Position-specific norms are Phase 2.
 7. **Report date range in UI** — currently set only via CLI args. A form inside the HTML for re-running was spec'd but not built.
@@ -104,27 +105,9 @@ A Python-based static HTML report generator. Run `generate_report.py` before a m
 
 ---
 
-## Trend Charts — Design Spec (planned 2026-03-29, implementation pending)
-
-Implementation plan saved to `C:\Users\eric_rash\.claude\plans\abundant-watching-brook.md`.
-
-### What Will Be Built
-Longitudinal trend charts added below the existing radar+metrics profile panel. No changes to existing profile content.
-
-### UI
-- **Combined chart** (always visible): 4 colored domain composite t-score lines over time (CMJ blue, GPS green, Body Weight amber, Strength red). Null gaps render as visual breaks for off-season.
-- **Expand buttons** (one per domain): click to show/hide per-domain detail chart.
-- **Detail charts** (collapsed by default): individual metric lines with raw values on y-axis; hover tooltip shows raw value + t-score.
-
-### Data Architecture
-- `score()` now returns `(df_scored, pop_stats)` — pop_stats holds mean/std per metric for consistent historical t-scoring.
-- Four new history loaders in `src/data.py`: `load_cmj_history()`, `load_imtp_history()`, `load_bw_history()`, `load_gps_history()` — return all records in date range (vs. most-recent/aggregated in snapshot loaders).
-- `build_history()` in `src/renderer.py` attaches `cmj_history`, `gps_history`, `bw_history`, `imtp_history` arrays to each athlete JSON record before serialization.
-- GPS history uses 7-day rolling average; gaps > 21 days get a null sentinel row so Chart.js renders a break.
-- T-scores in history use snapshot population stats — same scale throughout.
-
-### Files to Change
-`src/data.py`, `src/scorer.py`, `src/renderer.py`, `generate_report.py`, `templates/report.html.j2`
-
-### Known Deferred
-- Dual y-axes within domain detail charts (RFD N/s vs Peak Force/BM N/kg)
+## Trend Charts (added 2026-03-30)
+- All 4 domains have longitudinal charts in athlete profile panel
+- Combined view: domain composite t-scores (0–100) over time
+- Expandable per-domain detail: raw values on y-axis, t-score in hover tooltip
+- GPS uses 7-day rolling average; null sentinels render off-season gaps as breaks
+- T-scores in history use snapshot population stats for consistent baseline

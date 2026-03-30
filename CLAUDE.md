@@ -95,7 +95,7 @@ To add new athletes or update IDs, edit `data/athlete_roster.csv` directly.
 
 See [CONTEXT.md](CONTEXT.md) for full detail. Key deferred items:
 
-- **Dual y-axes in trend detail charts** -- RFD (N/s) and Peak Force/BM (N/kg) share a single y-axis; metrics within GPS and Strength have very different scales
+- **Dual y-axes in trend detail charts** -- RFD (N/s) and Peak Force/BM (N/kg) share a single y-axis; add secondary axis when Chart.js dual-axis is wired up
 - **Athlete comparison panel** -- side-by-side spider chart overlay
 - **BW fallback** -- use `"Bodyweight in Kilograms"` from ForceDecks `raw_tests` when CSV has no match
 - **Position-specific normalization** -- v1 uses full-roster z-scores
