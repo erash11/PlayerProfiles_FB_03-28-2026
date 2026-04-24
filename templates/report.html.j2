@@ -179,6 +179,7 @@
       <span class="pill {% if gps_count > 0 %}ok{% endif %}">GPS {{ gps_count }} athletes</span>
       <span class="pill {% if bw_count > 0 %}ok{% endif %}">BW {{ bw_count }} athletes</span>
       <span class="pill {% if imtp_count > 0 %}ok{% endif %}">IMTP {{ imtp_count }} athletes</span>
+      <span class="pill {% if perch_count > 0 %}ok{% endif %}">Perch {{ perch_count }} athletes</span>
     </div>
   </div>
 
@@ -213,6 +214,7 @@
           <th onclick="sortTable('gps_domain')" id="th-gps_domain">GPS</th>
           <th onclick="sortTable('bw_domain')" id="th-bw_domain">BW</th>
           <th onclick="sortTable('strength_domain')" id="th-strength_domain">Strength</th>
+          <th onclick="sortTable('weight_room_domain')" id="th-weight_room_domain">Wt Rm</th>
           <th>RAG</th>
         </tr>
       </thead>
@@ -241,15 +243,21 @@ const TEAM_AVG = {
   peak_force_n:        {{ team_avg.peak_force_n  | default(0) | round(0) }},
   rfd_100ms:           {{ team_avg.rfd_100ms     | default(0) | round(0) }},
   rfd_200ms:           {{ team_avg.rfd_200ms     | default(0) | round(0) }},
+  bs_1rm_bw:   {{ team_avg.bs_1rm_bw  if team_avg.bs_1rm_bw  is not none else 0 }},
+  pc_1rm_bw:   {{ team_avg.pc_1rm_bw  if team_avg.pc_1rm_bw  is not none else 0 }},
+  bp_1rm_bw:   {{ team_avg.bp_1rm_bw  if team_avg.bp_1rm_bw  is not none else 0 }},
+  hpc_1rm_bw:  {{ team_avg.hpc_1rm_bw if team_avg.hpc_1rm_bw is not none else 0 }},
 };
 
 const SPIDER_LABELS = [
   "Jump Height", "Peak Power/BM", "mRSI",
-  "High Speed Dist", "Player Load", "Max Velocity", "Body Weight", "Peak Force/BM"
+  "High Speed Dist", "Player Load", "Max Velocity", "Body Weight", "Peak Force/BM",
+  "Weight Room"
 ];
 const SPIDER_T_KEYS = [
   "jump_height_t","peak_power_bm_t","mrsi_t",
-  "hsd_t","player_load_t","max_vel_t","weight_t","peak_force_bm_t"
+  "hsd_t","player_load_t","max_vel_t","weight_t","peak_force_bm_t",
+  "weight_room_domain"
 ];
 
 // ── Sort state ──
@@ -273,6 +281,7 @@ function renderRow(a) {
   const gpsHtml      = a.gps_domain      != null ? fmt(a.gps_domain)      : '<span class="val-na">—</span>';
   const bwHtml       = a.bw_domain       != null ? fmt(a.bw_domain)       : '<span class="val-na">—</span>';
   const strengthHtml = a.strength_domain != null ? fmt(a.strength_domain) : '<span class="val-na">—</span>';
+  const wrHtml = a.weight_room_domain != null ? fmt(a.weight_room_domain) : '<span class="val-na">—</span>';
   const tsaHtml      = a.tsa_score       != null ? fmt(a.tsa_score)       : '<span class="val-na">—</span>';
 
   return `
@@ -286,10 +295,11 @@ function renderRow(a) {
       <td class="domain-cell">${gpsHtml}</td>
       <td class="domain-cell">${bwHtml}</td>
       <td class="domain-cell">${strengthHtml}</td>
+      <td class="domain-cell">${wrHtml}</td>
       <td class="rag-cell"><span class="rag ${a.rag}"></span></td>
     </tr>
     <tr class="profile-row" id="profile-${a.forcedecks_id}">
-      <td colspan="9" class="profile-panel" id="panel-${a.forcedecks_id}"></td>
+      <td colspan="10" class="profile-panel" id="panel-${a.forcedecks_id}"></td>
     </tr>`;
 }
 
@@ -313,6 +323,12 @@ function buildMetricsTable(a) {
       { label: "Peak Force",    raw: fmt(a.peak_force_n, 0)+" N",     z: a.peak_force_n_z,  t: a.peak_force_n_t,  avg: fmt(TEAM_AVG.peak_force_n, 0)+" N" },
       { label: "RFD 0–100ms",   raw: fmt(a.rfd_100ms, 0)+" N/s",     z: a.rfd_100ms_z,     t: a.rfd_100ms_t,     avg: fmt(TEAM_AVG.rfd_100ms, 0)+" N/s" },
       { label: "RFD 0–200ms",   raw: fmt(a.rfd_200ms, 0)+" N/s",     z: a.rfd_200ms_z,     t: a.rfd_200ms_t,     avg: fmt(TEAM_AVG.rfd_200ms, 0)+" N/s" },
+    ]},
+    { section: "Weight Room (Perch)", metrics: [
+      { label: "Back Squat 1RM/BW",       raw: fmt(a.bs_1rm_bw,  2), z: a.bs_1rm_bw_z,  t: a.bs_1rm_bw_t,  avg: fmt(TEAM_AVG.bs_1rm_bw,  2) },
+      { label: "Power Clean 1RM/BW",      raw: fmt(a.pc_1rm_bw,  2), z: a.pc_1rm_bw_z,  t: a.pc_1rm_bw_t,  avg: fmt(TEAM_AVG.pc_1rm_bw,  2) },
+      { label: "Bench Press 1RM/BW",      raw: fmt(a.bp_1rm_bw,  2), z: a.bp_1rm_bw_z,  t: a.bp_1rm_bw_t,  avg: fmt(TEAM_AVG.bp_1rm_bw,  2) },
+      { label: "Hang Power Clean 1RM/BW", raw: fmt(a.hpc_1rm_bw, 2), z: a.hpc_1rm_bw_z, t: a.hpc_1rm_bw_t, avg: fmt(TEAM_AVG.hpc_1rm_bw, 2) },
     ]},
   ];
 
@@ -367,6 +383,7 @@ const TREND_DOMAIN_CFG = [
   { key: "gps",  histKey: "gps_history",  domainT: "gps_domain_t",  label: "GPS",         color: "#22c55e" },
   { key: "bw",   histKey: "bw_history",   domainT: "bw_domain_t",   label: "Body Weight", color: "#f59e0b" },
   { key: "imtp", histKey: "imtp_history", domainT: "str_domain_t",  label: "Strength",    color: "#ef4444" },
+  { key: "wr", histKey: "perch_history", domainT: "wr_domain_t", label: "Weight Room", color: "#a855f7" },
 ];
 
 function buildTrendsSection(a) {
@@ -515,6 +532,12 @@ const TREND_DETAIL_METRICS = {
     { key: "peak_force_bm",   tKey: "peak_force_bm_t", label: "Peak Force/BM (N/kg)", color: "#ef4444", dash: [] },
     { key: "rfd_100ms",       tKey: "rfd_100ms_t",     label: "RFD 0\u2013100ms (N/s)",    color: "#f87171", dash: [5, 3] },
     { key: "rfd_200ms",       tKey: "rfd_200ms_t",     label: "RFD 0\u2013200ms (N/s)",    color: "#fca5a5", dash: [2, 4] },
+  ],
+  wr: [
+    { key: "bs_1rm_bw",  tKey: "bs_1rm_bw_t",  label: "Back Squat 1RM/BW",       color: "#c084fc", dash: [] },
+    { key: "pc_1rm_bw",  tKey: "pc_1rm_bw_t",  label: "Power Clean 1RM/BW",      color: "#a855f7", dash: [] },
+    { key: "bp_1rm_bw",  tKey: "bp_1rm_bw_t",  label: "Bench Press 1RM/BW",      color: "#7e22ce", dash: [5,3] },
+    { key: "hpc_1rm_bw", tKey: "hpc_1rm_bw_t", label: "Hang Power Clean 1RM/BW", color: "#e879f9", dash: [2,4] },
   ],
 };
 
