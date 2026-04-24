@@ -34,15 +34,17 @@ python generate_report.py --start 2025-09-01 --end 2026-03-28 --label "Spring 20
 
 ```
 generate_report.py      # CLI entry: argparse -> data -> score -> render -> write HTML
-config.py               # absolute paths to all 4 data sources + output dir
+config.py               # absolute paths to all 5 data sources + output dir
 src/
-  data.py               # load_cmj(), load_gps(), load_bodyweight(), load_imtp(), merge_all()
-  scorer.py             # z->t per metric, domain composites, TSA, RAG
+  data.py               # load_cmj(), load_gps(), load_bodyweight(), load_imtp(), load_perch(), merge_all()
+  scorer.py             # z->t per metric, 5 domain composites, TSA, RAG
   renderer.py           # serialize DataFrame to JSON, render Jinja2 template
+  perch_ingest.py       # Perch API client → data/perch.duckdb cache (run separately)
 templates/
-  report.html.j2        # dark-theme HTML: Chart.js radar (8 axes) + sortable table + inline JS
+  report.html.j2        # dark-theme HTML: Chart.js radar (9 axes) + sortable table + inline JS
 data/
   athlete_roster.csv    # 98 active athletes: full_name, jersey_number, position, catapult_id, forcedecks_id
+  perch.duckdb          # Perch 1RM cache (not committed; populate with src/perch_ingest.py)
 output/                 # generated HTML files (not committed)
 ```
 
@@ -60,7 +62,7 @@ output/                 # generated HTML files (not committed)
 
 **All paths are defined in `config.py`.** Change them there if pipelines move.
 
-## TSA Scoring (current: 8 axes, 4 domains; planned: +1 domain)
+## TSA Scoring (9 axes, 5 domains)
 
 | Domain | Metric | Source | Field |
 |--------|--------|--------|-------|
@@ -72,22 +74,22 @@ output/                 # generated HTML files (not committed)
 | GPS | Max Velocity (m/s) | `athlete_sessions` | `max_velocity_ms` |
 | BW  | Body Weight (kg) | `BodyWeightMaster.csv` | WEIGHT x 0.453592 |
 | Strength | Peak Force / BM (N/kg) | `imtp_tests` | `"Peak Vertical Force / BM"` |
-| **Weight Room** *(planned)* | Back Squat 1RM/BW | Perch API → `perch.duckdb` | 1RM (lbs) ÷ BW (lbs) |
-| **Weight Room** *(planned)* | Power Clean 1RM/BW | Perch API → `perch.duckdb` | 1RM (lbs) ÷ BW (lbs) |
-| **Weight Room** *(planned)* | Bench Press 1RM/BW | Perch API → `perch.duckdb` | 1RM (lbs) ÷ BW (lbs) |
-| **Weight Room** *(planned)* | Hang Power Clean 1RM/BW | Perch API → `perch.duckdb` | 1RM (lbs) ÷ BW (lbs) |
+| Weight Room | Back Squat 1RM/BW | `perch.duckdb` | 1RM (lbs) ÷ BW (lbs) |
+| Weight Room | Power Clean 1RM/BW | `perch.duckdb` | 1RM (lbs) ÷ BW (lbs) |
+| Weight Room | Bench Press 1RM/BW | `perch.duckdb` | 1RM (lbs) ÷ BW (lbs) |
+| Weight Room | Hang Power Clean 1RM/BW | `perch.duckdb` | 1RM (lbs) ÷ BW (lbs) |
 
 **Display-only IMTP metrics** (shown in profile panel, not in TSA domain score): Peak Force (N), RFD 0–100ms (N/s), RFD 0–200ms (N/s).
 
-**Scoring:** z-score per metric (population = all athletes with that metric) -> t-score (z*10+50, clipped 0-100) -> domain mean (CMJ avg of 3, GPS avg of 3, BW = weight_t, Strength = peak_force_bm_t) -> TSA = mean of available domains.
+**Scoring:** z-score per metric (population = all athletes with that metric) -> t-score (z*10+50, clipped 0-100) -> domain mean (CMJ avg of 3, GPS avg of 3, BW = weight_t, Strength = peak_force_bm_t, Weight Room = mean of up to 4 exercise t-scores) -> TSA = mean of available domains (partial domain scores allowed for Weight Room).
 
-**Planned Weight Room scoring:** 4 t-scores (one per exercise 1RM/BW) -> Weight Room domain mean -> TSA becomes mean of 5 domains. Weight Room shows as a single composite axis on the radar; individual exercise 1RMs displayed in profile panel only.
+**Weight Room radar axis:** single composite score (`weight_room_domain`); individual exercise 1RMs shown in profile panel only. Athletes without Perch data score from the remaining 4 domains; "Weight Room" shown in missing_domains note.
 
 **RAG:** roster-relative -- top 33% green, middle 34% amber, bottom 33% red.
 
 **Missing domain handling:** athletes missing any domain still get a TSA from available domains; a note appears in their profile panel.
 
-## Perch API Integration (Ingest built — scoring/UI pending)
+## Perch API Integration (fully implemented 2026-04-24)
 
 **API:** Bearer token auth. Docs at `https://app.swaggerhub.com/apis-docs/PerchFitness/perch-api/1.2.0`
 
@@ -122,7 +124,7 @@ To add new athletes or update IDs, edit `data/athlete_roster.csv` directly.
 
 See [CONTEXT.md](CONTEXT.md) for full detail. Key deferred items:
 
-- **Perch / Weight Room domain** -- Ingest script (`src/perch_ingest.py`) and DuckDB cache (`data/perch.duckdb`) built (2026-04-24). Still needed: `load_perch()` in `data.py`, Weight Room domain in `scorer.py`, renderer + template updates (Tasks 4–9 in `docs/superpowers/plans/2026-04-24-perch-weight-room-domain.md`).
+- **Perch / Weight Room domain** -- Fully implemented (2026-04-24). Run `src/perch_ingest.py --probe` first time to verify API field names, then full ingest. Once `data/perch.duckdb` is populated the Weight Room domain activates automatically.
 - **Dual y-axes in trend detail charts** -- RFD (N/s) and Peak Force/BM (N/kg) share a single y-axis; add secondary axis when Chart.js dual-axis is wired up
 - **Athlete comparison panel** -- side-by-side spider chart overlay
 - **BW fallback** -- use `"Bodyweight in Kilograms"` from ForceDecks `raw_tests` when CSV has no match

@@ -45,7 +45,7 @@ A Python-based static HTML report generator. Run `generate_report.py` before a m
 
 ---
 
-## TSA Scoring — 8 Axes (Confirmed)
+## TSA Scoring — 9 Axes, 5 Domains
 
 | # | Axis | Domain | Source | Field |
 |---|------|--------|--------|-------|
@@ -60,8 +60,8 @@ A Python-based static HTML report generator. Run `generate_report.py` before a m
 
 **Display-only IMTP metrics** (in profile panel, not TSA): Peak Force N, RFD 0–100ms, RFD 0–200ms.
 
-**Domain structure:** CMJ (axes 1–3), GPS (axes 4–6), BW (axis 7), Strength (axis 8) — equal 25% weight each.
-**TSA for athletes missing a domain:** computed as mean of available domains (noted in report).
+**Domain structure:** CMJ (axes 1–3), GPS (axes 4–6), BW (axis 7), Strength (axis 8), Weight Room (axis 9 — composite of up to 4 Perch exercises) — equal weight per available domain.
+**TSA for athletes missing a domain:** computed as mean of available domains (noted in report). Weight Room is partial-data-tolerant: athletes with only some exercises still score.
 
 ---
 
@@ -75,7 +75,7 @@ A Python-based static HTML report generator. Run `generate_report.py` before a m
 
 ---
 
-## Perch API Integration (Ingest built 2026-04-24 — Scoring/UI pending)
+## Perch API Integration (fully implemented 2026-04-24)
 
 Design decisions locked in brainstorming session (2026-04-23):
 
@@ -88,18 +88,26 @@ Design decisions locked in brainstorming session (2026-04-23):
 - **Auth:** Bearer token in `.env` as `PERCH_API_TOKEN`. Copy `.env.example` → `.env`.
 - **API pagination:** `/stats` and `/sets` use `next_token`; ingest handles pagination.
 
-### What was built (2026-04-24)
+### What was built (2026-04-24) — full implementation
 
+**Ingest layer:**
 - `config.py` — added `PERCH_DB` path (`data/perch.duckdb`)
 - `requirements.txt` — added `requests>=2.31.0`, `python-dotenv>=1.0.0`
 - `.env.example` — token template
-- `src/perch_ingest.py` — full ingest script:
-  - `ensure_schema()` / `upsert_rows()` — DuckDB cache layer
-  - `fetch_users()` / `fetch_stats()` — paginated Perch API client
-  - `ingest()` — top-level orchestrator
-  - `main()` / CLI — `--start`, `--end`, `--probe` flags
-- `tests/test_perch.py` — 3 tests for config import, schema creation, upsert deduplication
-- `docs/superpowers/plans/2026-04-24-perch-weight-room-domain.md` — full 9-task implementation plan
+- `src/perch_ingest.py` — full ingest script: `ensure_schema()`, `upsert_rows()`, `fetch_users()`, `fetch_stats()` (paginated), `ingest()`, CLI with `--start`/`--end`/`--probe`
+
+**Data / scoring / rendering:**
+- `src/data.py` — `load_perch()`, `load_perch_history()`, `_load_bw_lbs()`, updated `merge_all()`
+- `src/scorer.py` — 4 Perch metrics in `_METRICS`, `_WEIGHT_ROOM_T`, `weight_room_domain`, 5-domain TSA, updated `missing_domains`
+- `src/renderer.py` — 4 Perch z-columns, expanded `include_cols`, `build_history()` with `perch_hist` arg + perch loop, updated `render()` signature + `perch_count`
+- `generate_report.py` — loads `perch_hist`, prints Perch coverage, passes to `render()`
+
+**UI:**
+- `templates/report.html.j2` — 9th radar axis ("Weight Room"), "Wt Rm" sortable table column, colspan 9→10, profile panel "Weight Room (Perch)" metrics section, TREND_DOMAIN_CFG + TREND_DETAIL_METRICS for wr, chart cleanup arrays updated, Perch coverage pill
+
+**Tests:** 26 passing (18 in `test_perch.py` / `test_history.py` combined)
+
+**Implementation plan:** `docs/superpowers/plans/2026-04-24-perch-weight-room-domain.md` (all 9 tasks complete)
 
 ### ⚠ First-time ingest setup
 
@@ -107,16 +115,9 @@ Design decisions locked in brainstorming session (2026-04-23):
 cp .env.example .env          # fill in PERCH_API_TOKEN
 python src/perch_ingest.py --start 2025-09-01 --end 2026-03-28 --probe
 # Verify field name constants in src/perch_ingest.py match actual API responses
-# Then run without --probe for full ingest
+python src/perch_ingest.py --start 2025-09-01 --end 2026-03-28
+# Then regenerate the report — Weight Room domain activates automatically
 ```
-
-### Still pending (Tasks 4–9 in plan)
-
-- `src/data.py` — `load_perch()`, `load_perch_history()`, update `merge_all()`
-- `src/scorer.py` — Weight Room domain, 5-domain TSA
-- `src/renderer.py` — Perch columns, `build_history()` with perch loop
-- `generate_report.py` — load + print perch_hist
-- `templates/report.html.j2` — 9th spider axis, "Wt Rm" table column, profile section, trend chart
 
 ---
 
