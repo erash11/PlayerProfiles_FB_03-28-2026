@@ -54,7 +54,7 @@ output/                 # generated HTML files (not committed)
 | GPS DB | `C:/Users/eric_rash/Desktop/DEV/DataBase_GPS_Reporting/gps_report/data/gps_history.duckdb` | Built |
 | Body Weight CSV | `C:/Users/eric_rash/Desktop/DEV/Football/BodWeightWeb/BodyWeightMaster.csv` | Built |
 | Roster crosswalk | `data/athlete_roster.csv` | Built |
-| Perch DB | `data/perch.duckdb` (local cache, populated by `src/perch_ingest.py`) | **Planned** |
+| Perch DB | `data/perch.duckdb` (local cache, populated by `src/perch_ingest.py`) | **Built** |
 
 **ForcePlate DB tables used:** `raw_tests` (CMJ metrics), `classified_athletes` (mRSI + CMJ classification), `imtp_tests` (IMTP metrics). IMTP data is ingested via the ForcePlate pipeline (`ForcePlate_DecisionSystem/src/ingest/pipeline.py`).
 
@@ -87,11 +87,17 @@ output/                 # generated HTML files (not committed)
 
 **Missing domain handling:** athletes missing any domain still get a TSA from available domains; a note appears in their profile panel.
 
-## Perch API Integration (Planned — design complete, implementation pending)
+## Perch API Integration (Ingest built — scoring/UI pending)
 
 **API:** Bearer token auth. Docs at `https://app.swaggerhub.com/apis-docs/PerchFitness/perch-api/1.2.0`
 
-**Ingest strategy:** `src/perch_ingest.py` calls `/v2/users` to build name→perch_id mapping, then `/stats` endpoint to pull 1RM per exercise per athlete. Caches to `data/perch.duckdb`. Run separately before generating report.
+**Ingest script:** `src/perch_ingest.py` — run before generating the report:
+```bash
+python src/perch_ingest.py --start 2025-09-01 --end 2026-03-28
+# Use --probe first to dump raw API responses and verify field name constants
+```
+
+**⚠ First-time setup:** Run `--probe` to confirm that `PERCH_API_BASE`, field name constants (`_USER_ID_FIELD`, `_STAT_ONE_RM_FIELD`, `_STAT_EXERCISE_FIELD`, etc.), and `_EXERCISE_MAP` keys all match the live API. Constants are at the top of `src/perch_ingest.py`.
 
 **Exercises tracked:** back squat, power clean, bench press, hang power clean.
 
@@ -99,7 +105,7 @@ output/                 # generated HTML files (not committed)
 
 **Athlete join:** name-match from Perch `/v2/users` (first_name + last_name) to `athlete_roster.csv` full_name using same `_normalize_name()` pattern as BW CSV join.
 
-**API token:** stored in `.env` as `PERCH_API_TOKEN` (never committed).
+**API token:** stored in `.env` as `PERCH_API_TOKEN` (never committed). Copy `.env.example` → `.env` to get started.
 
 ## Athlete Roster
 
@@ -116,7 +122,7 @@ To add new athletes or update IDs, edit `data/athlete_roster.csv` directly.
 
 See [CONTEXT.md](CONTEXT.md) for full detail. Key deferred items:
 
-- **Perch / Weight Room domain** -- `src/perch_ingest.py`, `data/perch.duckdb`, 5th TSA domain. Design complete (2026-04-23), implementation pending.
+- **Perch / Weight Room domain** -- Ingest script (`src/perch_ingest.py`) and DuckDB cache (`data/perch.duckdb`) built (2026-04-24). Still needed: `load_perch()` in `data.py`, Weight Room domain in `scorer.py`, renderer + template updates (Tasks 4–9 in `docs/superpowers/plans/2026-04-24-perch-weight-room-domain.md`).
 - **Dual y-axes in trend detail charts** -- RFD (N/s) and Peak Force/BM (N/kg) share a single y-axis; add secondary axis when Chart.js dual-axis is wired up
 - **Athlete comparison panel** -- side-by-side spider chart overlay
 - **BW fallback** -- use `"Bodyweight in Kilograms"` from ForceDecks `raw_tests` when CSV has no match

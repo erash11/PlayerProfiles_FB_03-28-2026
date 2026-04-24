@@ -75,21 +75,48 @@ A Python-based static HTML report generator. Run `generate_report.py` before a m
 
 ---
 
-## Perch API Integration (Design Complete 2026-04-23 — Implementation Pending)
+## Perch API Integration (Ingest built 2026-04-24 — Scoring/UI pending)
 
-Design decisions locked in brainstorming session:
+Design decisions locked in brainstorming session (2026-04-23):
 
 - **5th TSA domain: "Weight Room"** — sits alongside CMJ, GPS, BW, Strength
 - **Exercises:** back squat, power clean, bench press, hang power clean
 - **Metric:** 1RM (from Perch `/stats` ONE_RM field), normalized by bodyweight (1RM ÷ BW, both lbs)
 - **Scoring:** 4 t-scores (one per exercise 1RM/BW) → Weight Room domain mean → TSA = mean of 5 domains
-- **Radar:** Weight Room shows as a **single composite axis** (not 4 individual axes) → radar stays clean at 5 domain-level axes. Individual exercise 1RMs shown in profile panel only (same pattern as IMTP RFD display-only metrics).
+- **Radar:** Weight Room shows as a **single composite axis** (not 4 individual axes) → radar stays clean. Individual exercise 1RMs shown in profile panel only.
 - **Athlete join:** name-match from Perch `/v2/users` endpoint → normalized name → `athlete_roster.csv`. Same `_normalize_name()` pattern as BW CSV.
-- **Ingestion:** `src/perch_ingest.py` → `data/perch.duckdb` (local cache). Run separately before generating report, similar to ForcePlate pipeline. Path added to `config.py`.
-- **Auth:** Bearer token in `.env` as `PERCH_API_TOKEN`.
-- **API pagination:** `/stats` and `/sets` use `next_token`; ingest must handle pagination.
+- **Auth:** Bearer token in `.env` as `PERCH_API_TOKEN`. Copy `.env.example` → `.env`.
+- **API pagination:** `/stats` and `/sets` use `next_token`; ingest handles pagination.
 
-**Next step:** invoke writing-plans skill to create implementation plan.
+### What was built (2026-04-24)
+
+- `config.py` — added `PERCH_DB` path (`data/perch.duckdb`)
+- `requirements.txt` — added `requests>=2.31.0`, `python-dotenv>=1.0.0`
+- `.env.example` — token template
+- `src/perch_ingest.py` — full ingest script:
+  - `ensure_schema()` / `upsert_rows()` — DuckDB cache layer
+  - `fetch_users()` / `fetch_stats()` — paginated Perch API client
+  - `ingest()` — top-level orchestrator
+  - `main()` / CLI — `--start`, `--end`, `--probe` flags
+- `tests/test_perch.py` — 3 tests for config import, schema creation, upsert deduplication
+- `docs/superpowers/plans/2026-04-24-perch-weight-room-domain.md` — full 9-task implementation plan
+
+### ⚠ First-time ingest setup
+
+```bash
+cp .env.example .env          # fill in PERCH_API_TOKEN
+python src/perch_ingest.py --start 2025-09-01 --end 2026-03-28 --probe
+# Verify field name constants in src/perch_ingest.py match actual API responses
+# Then run without --probe for full ingest
+```
+
+### Still pending (Tasks 4–9 in plan)
+
+- `src/data.py` — `load_perch()`, `load_perch_history()`, update `merge_all()`
+- `src/scorer.py` — Weight Room domain, 5-domain TSA
+- `src/renderer.py` — Perch columns, `build_history()` with perch loop
+- `generate_report.py` — load + print perch_hist
+- `templates/report.html.j2` — 9th spider axis, "Wt Rm" table column, profile section, trend chart
 
 ---
 
