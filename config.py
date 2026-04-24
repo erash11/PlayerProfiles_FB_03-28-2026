@@ -14,6 +14,7 @@ BODYWEIGHT_CSV = Path(
     "C:/Users/eric_rash/Desktop/DEV/Football/BodWeightWeb/BodyWeightMaster.csv"
 )
 ROSTER_CSV = PROJECT_ROOT / "data" / "athlete_roster.csv"
+PERCH_DB   = PROJECT_ROOT / "data" / "perch.duckdb"
 
 # --- Output ---
 OUTPUT_DIR = PROJECT_ROOT / "output"
