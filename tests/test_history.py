@@ -6,7 +6,7 @@ from src.scorer import score
 
 
 def _make_df():
-    """Minimal 3-athlete DataFrame with all required columns."""
+    """Minimal 3-athlete DataFrame with all required columns including Perch."""
     return pd.DataFrame({
         "forcedecks_id":      ["a", "b", "c"],
         "catapult_id":        ["c1", "c2", None],
@@ -25,6 +25,11 @@ def _make_df():
         "peak_force_n":       [2000.0, 3850.0, 2700.0],
         "rfd_100ms":          [6000.0, 9000.0, 7500.0],
         "rfd_200ms":          [5000.0, 8000.0, 6500.0],
+        # Perch — Carol has no Weight Room data
+        "bs_1rm_bw":          [2.0, 2.5, None],
+        "pc_1rm_bw":          [1.3, 1.6, None],
+        "bp_1rm_bw":          [1.1, 1.4, None],
+        "hpc_1rm_bw":         [1.2, 1.5, None],
     })
 
 
@@ -182,3 +187,48 @@ def test_build_history_cmj_t_scores():
     assert h[0]["date"] == "2025-09-05"
     assert h[0]["jump_height_cm"] == pytest.approx(70.0)
     assert h[0]["jump_height_t"]  == pytest.approx(60.0, abs=0.5)   # z=1 → t=60
+
+
+# ── Weight Room domain tests ──────────────────────────────────────────────────
+
+def test_scorer_has_weight_room_domain():
+    df = _make_df()
+    df_scored, _ = score(df)
+    assert "weight_room_domain" in df_scored.columns
+
+
+def test_weight_room_nan_for_missing_perch():
+    """Athlete with no Perch data gets NaN weight_room_domain (not a numeric value)."""
+    df = _make_df()
+    df_scored, _ = score(df)
+    carol = df_scored[df_scored["full_name"] == "Carol Lee"]
+    assert carol["weight_room_domain"].isna().all()
+
+
+def test_tsa_still_scores_without_weight_room():
+    """Athletes missing Weight Room domain still get a TSA from the other 4 domains."""
+    df = _make_df()
+    df_scored, _ = score(df)
+    carol = df_scored[df_scored["full_name"] == "Carol Lee"]
+    assert carol["tsa_score"].notna().all()
+
+
+def test_missing_domains_includes_weight_room_label():
+    df = _make_df()
+    df_scored, _ = score(df)
+    carol = df_scored[df_scored["full_name"] == "Carol Lee"]
+    assert "Weight Room" in carol["missing_domains"].iloc[0]
+
+
+def test_pop_stats_has_perch_keys():
+    df = _make_df()
+    _, pop_stats = score(df)
+    for key in ["bs_1rm_bw", "pc_1rm_bw", "bp_1rm_bw", "hpc_1rm_bw"]:
+        assert key in pop_stats, f"pop_stats missing Perch key: {key}"
+
+
+def test_scored_df_has_five_domain_columns():
+    df = _make_df()
+    df_scored, _ = score(df)
+    for col in ["cmj_domain", "gps_domain", "bw_domain", "strength_domain", "weight_room_domain"]:
+        assert col in df_scored.columns, f"Missing domain column: {col}"

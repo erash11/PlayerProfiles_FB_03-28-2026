@@ -17,12 +17,18 @@ _METRICS = {
     "peak_force_n":        "peak_force_n_t",
     "rfd_100ms":           "rfd_100ms_t",
     "rfd_200ms":           "rfd_200ms_t",
+    # Weight Room (Perch 1RM / BW, dimensionless ratios)
+    "bs_1rm_bw":           "bs_1rm_bw_t",
+    "pc_1rm_bw":           "pc_1rm_bw_t",
+    "bp_1rm_bw":           "bp_1rm_bw_t",
+    "hpc_1rm_bw":          "hpc_1rm_bw_t",
 }
 
-_CMJ_T      = ["jump_height_t", "peak_power_bm_t", "mrsi_t"]
-_GPS_T      = ["hsd_t", "player_load_t", "max_vel_t"]
-_BW_T       = ["weight_t"]
-_STRENGTH_T = ["peak_force_bm_t"]
+_CMJ_T         = ["jump_height_t", "peak_power_bm_t", "mrsi_t"]
+_GPS_T         = ["hsd_t", "player_load_t", "max_vel_t"]
+_BW_T          = ["weight_t"]
+_STRENGTH_T    = ["peak_force_bm_t"]
+_WEIGHT_ROOM_T = ["bs_1rm_bw_t", "pc_1rm_bw_t", "bp_1rm_bw_t", "hpc_1rm_bw_t"]
 
 
 def _z_to_t(series: pd.Series) -> pd.Series:
@@ -58,8 +64,12 @@ def score(df: pd.DataFrame) -> tuple[pd.DataFrame, dict]:
     out["bw_domain"]       = out[_BW_T].mean(axis=1, skipna=False)
     out["strength_domain"] = out[_STRENGTH_T].mean(axis=1, skipna=False)
 
+    # Weight Room: partial exercise data still contributes; NaN only when all 4 are missing
+    wr_t_present = out[_WEIGHT_ROOM_T].notna().any(axis=1)
+    out["weight_room_domain"] = out[_WEIGHT_ROOM_T].mean(axis=1, skipna=True).where(wr_t_present)
+
     # TSA = mean of available domains (at least 1 required)
-    domain_cols = ["cmj_domain", "gps_domain", "bw_domain", "strength_domain"]
+    domain_cols = ["cmj_domain", "gps_domain", "bw_domain", "strength_domain", "weight_room_domain"]
     out["tsa_score"] = out[domain_cols].mean(axis=1, skipna=True)
 
     # Rank (1 = highest TSA)
@@ -78,10 +88,11 @@ def score(df: pd.DataFrame) -> tuple[pd.DataFrame, dict]:
     missing = []
     for _, row in out.iterrows():
         domains = []
-        if pd.isna(row["cmj_domain"]):      domains.append("CMJ")
-        if pd.isna(row["gps_domain"]):      domains.append("GPS")
-        if pd.isna(row["bw_domain"]):       domains.append("BW")
-        if pd.isna(row["strength_domain"]): domains.append("Strength")
+        if pd.isna(row["cmj_domain"]):          domains.append("CMJ")
+        if pd.isna(row["gps_domain"]):          domains.append("GPS")
+        if pd.isna(row["bw_domain"]):           domains.append("BW")
+        if pd.isna(row["strength_domain"]):     domains.append("Strength")
+        if pd.isna(row["weight_room_domain"]):  domains.append("Weight Room")
         missing.append(", ".join(domains))
     out["missing_domains"] = missing
 
