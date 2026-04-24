@@ -52,3 +52,108 @@ def test_upsert_rows_inserts_and_deduplicates(tmp_path):
 
     assert count == 2, f"Expected 2 rows (deduped), got {count}"
     assert alice_1rm == pytest.approx(320.0), "Later value should overwrite earlier"
+
+
+# ── Fixtures ─────────────────────────────────────────────────────────────────
+
+def _make_perch_db(tmp_path, rows):
+    """Helper: create a temp perch.duckdb with given rows."""
+    db = str(tmp_path / "perch.duckdb")
+    conn = duckdb.connect(db)
+    from src.perch_ingest import ensure_schema, upsert_rows
+    ensure_schema(conn)
+    upsert_rows(conn, rows)
+    conn.close()
+    return db
+
+
+def _make_roster_csv(tmp_path):
+    import csv
+    p = str(tmp_path / "roster.csv")
+    with open(p, "w", newline="") as f:
+        writer = csv.DictWriter(
+            f, fieldnames=["full_name", "jersey_number", "position", "catapult_id", "forcedecks_id"]
+        )
+        writer.writeheader()
+        writer.writerow({"full_name": "Alice Smith", "jersey_number": "", "position": "WR",
+                         "catapult_id": "c1", "forcedecks_id": "fd1"})
+        writer.writerow({"full_name": "Bob Jones", "jersey_number": "", "position": "OL",
+                         "catapult_id": "c2", "forcedecks_id": "fd2"})
+    return p
+
+
+def _make_bw_csv(tmp_path):
+    p = str(tmp_path / "bw.csv")
+    with open(p, "w") as f:
+        f.write("DATE,NAME,WEIGHT,POS\n")
+        f.write('10/01/2025,"Smith, Alice",150,WR\n')  # 150 lbs
+        f.write('10/01/2025,"Jones, Bob",220,OL\n')    # 220 lbs
+    return p
+
+
+# ── load_perch() tests ────────────────────────────────────────────────────────
+
+def test_load_perch_returns_normalized_ratios(tmp_path):
+    """1RM / BW ratios computed correctly from cache."""
+    from unittest.mock import patch
+
+    db      = _make_perch_db(tmp_path, [
+        # Alice: BS 300 lbs / 150 lbs BW = 2.0
+        {"name_normalized": "alice smith", "perch_user_id": "u1",
+         "exercise": "Back Squat", "one_rm_lbs": 300.0, "test_date": "2025-10-15"},
+    ])
+    roster  = _make_roster_csv(tmp_path)
+    bw      = _make_bw_csv(tmp_path)
+
+    from src.data import load_perch
+    with patch("src.data.PERCH_DB", db), \
+         patch("src.data.ROSTER_CSV", roster), \
+         patch("src.data.BODYWEIGHT_CSV", bw):
+        df = load_perch("2025-09-01", "2026-03-28")
+
+    assert "bs_1rm_bw" in df.columns
+    alice = df[df["forcedecks_id"] == "fd1"]
+    assert len(alice) == 1
+    assert alice["bs_1rm_bw"].iloc[0] == pytest.approx(2.0, rel=1e-4)
+
+    # Bob has no Perch data — should not appear
+    assert "fd2" not in df["forcedecks_id"].values
+
+
+def test_load_perch_missing_db_returns_empty():
+    """If perch.duckdb doesn't exist, load_perch() returns empty DataFrame."""
+    from unittest.mock import patch
+    from src.data import load_perch
+
+    with patch("src.data.PERCH_DB", "/nonexistent/path/perch.duckdb"):
+        df = load_perch("2025-09-01", "2026-03-28")
+
+    assert df.empty or df["bs_1rm_bw"].isna().all()
+    assert "forcedecks_id" in df.columns
+
+
+# ── load_perch_history() tests ────────────────────────────────────────────────
+
+def test_load_perch_history_multiple_dates(tmp_path):
+    """History loader returns one row per date (not just most recent)."""
+    from unittest.mock import patch
+
+    db     = _make_perch_db(tmp_path, [
+        {"name_normalized": "alice smith", "perch_user_id": "u1",
+         "exercise": "Back Squat", "one_rm_lbs": 280.0, "test_date": "2025-09-01"},
+        {"name_normalized": "alice smith", "perch_user_id": "u1",
+         "exercise": "Back Squat", "one_rm_lbs": 300.0, "test_date": "2025-10-15"},
+    ])
+    roster = _make_roster_csv(tmp_path)
+    bw     = _make_bw_csv(tmp_path)
+
+    from src.data import load_perch_history
+    with patch("src.data.PERCH_DB", db), \
+         patch("src.data.ROSTER_CSV", roster), \
+         patch("src.data.BODYWEIGHT_CSV", bw):
+        df = load_perch_history("2025-09-01", "2026-03-28")
+
+    alice = df[df["forcedecks_id"] == "fd1"]
+    assert len(alice) == 2, f"Expected 2 history rows, got {len(alice)}"
+    dates = alice["test_date"].astype(str).str[:10].tolist()
+    assert dates == ["2025-09-01", "2025-10-15"]

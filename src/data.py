@@ -1,10 +1,12 @@
 """Data loading and merging from all three sources."""
 
 import re
+from pathlib import Path
+
 import duckdb
 import pandas as pd
 
-from config import FORCEPLATE_DB, GPS_DB, BODYWEIGHT_CSV, ROSTER_CSV
+from config import FORCEPLATE_DB, GPS_DB, BODYWEIGHT_CSV, ROSTER_CSV, PERCH_DB
 
 
 def _normalize_name(name: str) -> str:
@@ -389,6 +391,148 @@ def load_imtp_history(start_date: str, end_date: str) -> pd.DataFrame:
             result[c] = float("nan")
 
     return result[cols].sort_values(["forcedecks_id", "test_date"]).reset_index(drop=True)
+
+
+def _load_bw_lbs(end_date: str) -> pd.DataFrame:
+    """
+    Most recent body weight per athlete on or before end_date, in lbs.
+    Returns: name_normalized, weight_lbs
+    """
+    df = load_bodyweight(end_date)
+    df["weight_lbs"] = df["weight_kg"] / 0.453592
+    return df[["name_normalized", "weight_lbs"]]
+
+
+def load_perch(start_date: str, end_date: str) -> pd.DataFrame:
+    """
+    Most recent 1RM per exercise per athlete within [start_date, end_date],
+    normalized by snapshot body weight (end_date).
+    Returns: forcedecks_id, bs_1rm_bw, pc_1rm_bw, bp_1rm_bw, hpc_1rm_bw
+    Returns empty DataFrame if perch.duckdb doesn't exist or has no data.
+    """
+    empty = pd.DataFrame(columns=["forcedecks_id", "bs_1rm_bw", "pc_1rm_bw", "bp_1rm_bw", "hpc_1rm_bw"])
+
+    if not Path(PERCH_DB).exists():
+        return empty
+
+    try:
+        conn = duckdb.connect(str(PERCH_DB), read_only=True)
+        tables = conn.execute("SHOW TABLES").df()
+        if "perch_1rm" not in tables["name"].tolist():
+            conn.close()
+            return empty
+
+        # Most recent 1RM per athlete per exercise in period
+        latest = conn.execute("""
+            SELECT name_normalized, exercise, one_rm_lbs
+            FROM (
+                SELECT name_normalized, exercise, one_rm_lbs,
+                       ROW_NUMBER() OVER (
+                           PARTITION BY name_normalized, exercise
+                           ORDER BY test_date DESC
+                       ) AS rn
+                FROM perch_1rm
+                WHERE test_date BETWEEN ? AND ?
+            ) t
+            WHERE rn = 1
+        """, [start_date, end_date]).df()
+        conn.close()
+    except Exception:
+        return empty
+
+    if latest.empty:
+        return empty
+
+    # Pivot exercises wide: one column per exercise
+    pivoted = latest.pivot_table(
+        index="name_normalized", columns="exercise", values="one_rm_lbs"
+    ).reset_index()
+    pivoted.columns.name = None
+
+    # Ensure all 4 exercise columns exist (fill missing with NaN)
+    for ex, short in [("Back Squat", "bs"), ("Power Clean", "pc"),
+                      ("Bench Press", "bp"), ("Hang Power Clean", "hpc")]:
+        pivoted[f"{short}_1rm_lbs"] = pivoted[ex] if ex in pivoted.columns else float("nan")
+
+    pivoted = pivoted[["name_normalized", "bs_1rm_lbs", "pc_1rm_lbs", "bp_1rm_lbs", "hpc_1rm_lbs"]]
+
+    # Join roster to get forcedecks_id
+    roster = pd.read_csv(ROSTER_CSV)
+    roster["name_normalized"] = roster["full_name"].apply(_normalize_name)
+    pivoted = pivoted.merge(roster[["name_normalized", "forcedecks_id"]], on="name_normalized", how="inner")
+
+    # Normalize by snapshot body weight
+    bw = _load_bw_lbs(end_date)
+    pivoted = pivoted.merge(bw, on="name_normalized", how="left")
+
+    for ex in ["bs", "pc", "bp", "hpc"]:
+        pivoted[f"{ex}_1rm_bw"] = pivoted[f"{ex}_1rm_lbs"] / pivoted["weight_lbs"]
+
+    cols = ["forcedecks_id", "bs_1rm_bw", "pc_1rm_bw", "bp_1rm_bw", "hpc_1rm_bw"]
+    return pivoted[cols].reset_index(drop=True)
+
+
+def load_perch_history(start_date: str, end_date: str) -> pd.DataFrame:
+    """
+    All Perch 1RM records per athlete within [start_date, end_date],
+    pivoted wide per test_date, normalized by snapshot body weight (end_date).
+    Returns: forcedecks_id, test_date, bs_1rm_bw, pc_1rm_bw, bp_1rm_bw, hpc_1rm_bw
+    Sorted by forcedecks_id, test_date ASC.
+    """
+    empty = pd.DataFrame(columns=["forcedecks_id", "test_date",
+                                   "bs_1rm_bw", "pc_1rm_bw", "bp_1rm_bw", "hpc_1rm_bw"])
+
+    if not Path(PERCH_DB).exists():
+        return empty
+
+    try:
+        conn = duckdb.connect(str(PERCH_DB), read_only=True)
+        tables = conn.execute("SHOW TABLES").df()
+        if "perch_1rm" not in tables["name"].tolist():
+            conn.close()
+            return empty
+
+        all_rows = conn.execute("""
+            SELECT name_normalized, exercise, one_rm_lbs, test_date
+            FROM perch_1rm
+            WHERE test_date BETWEEN ? AND ?
+            ORDER BY name_normalized, test_date
+        """, [start_date, end_date]).df()
+        conn.close()
+    except Exception:
+        return empty
+
+    if all_rows.empty:
+        return empty
+
+    # Pivot: one column per exercise, one row per (athlete, date)
+    pivoted = all_rows.pivot_table(
+        index=["name_normalized", "test_date"], columns="exercise", values="one_rm_lbs"
+    ).reset_index()
+    pivoted.columns.name = None
+
+    for ex, short in [("Back Squat", "bs"), ("Power Clean", "pc"),
+                      ("Bench Press", "bp"), ("Hang Power Clean", "hpc")]:
+        pivoted[f"{short}_1rm_lbs"] = pivoted[ex] if ex in pivoted.columns else float("nan")
+
+    # Join roster
+    roster = pd.read_csv(ROSTER_CSV)
+    roster["name_normalized"] = roster["full_name"].apply(_normalize_name)
+    pivoted = pivoted.merge(roster[["name_normalized", "forcedecks_id"]], on="name_normalized", how="inner")
+
+    # Normalize by snapshot BW
+    bw = _load_bw_lbs(end_date)
+    pivoted = pivoted.merge(bw, on="name_normalized", how="left")
+
+    for ex in ["bs", "pc", "bp", "hpc"]:
+        pivoted[f"{ex}_1rm_bw"] = pivoted[f"{ex}_1rm_lbs"] / pivoted["weight_lbs"]
+
+    cols = ["forcedecks_id", "test_date", "bs_1rm_bw", "pc_1rm_bw", "bp_1rm_bw", "hpc_1rm_bw"]
+    for c in cols:
+        if c not in pivoted.columns:
+            pivoted[c] = float("nan")
+
+    return pivoted[cols].sort_values(["forcedecks_id", "test_date"]).reset_index(drop=True)
 
 
 def merge_all(start_date: str, end_date: str) -> pd.DataFrame:
