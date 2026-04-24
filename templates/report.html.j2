@@ -700,7 +700,7 @@ function toggleProfile(id) {
     const pid = r.id.replace("profile-", "");
     const chartId = `chart-${pid}`;
     if (activeCharts[chartId]) { activeCharts[chartId].destroy(); delete activeCharts[chartId]; }
-    ["trend-combined", "trend-cmj", "trend-gps", "trend-bw", "trend-imtp"].forEach(prefix => {
+    ["trend-combined", "trend-cmj", "trend-gps", "trend-bw", "trend-imtp", "trend-wr"].forEach(prefix => {
       const tid = `${prefix}-${pid}`;
       if (activeCharts[tid]) { activeCharts[tid].destroy(); delete activeCharts[tid]; }
     });
@@ -753,7 +753,7 @@ function applyFilters() {
     const pid = r.id.replace("profile-", "");
     const chartId = `chart-${pid}`;
     if (activeCharts[chartId]) { activeCharts[chartId].destroy(); delete activeCharts[chartId]; }
-    ["trend-combined", "trend-cmj", "trend-gps", "trend-bw", "trend-imtp"].forEach(prefix => {
+    ["trend-combined", "trend-cmj", "trend-gps", "trend-bw", "trend-imtp", "trend-wr"].forEach(prefix => {
       const tid = `${prefix}-${pid}`;
       if (activeCharts[tid]) { activeCharts[tid].destroy(); delete activeCharts[tid]; }
     });
