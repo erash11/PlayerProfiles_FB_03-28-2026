@@ -6,7 +6,15 @@
       "Bash(git commit:*)",
       "Bash(python -m pytest tests/test_history.py -v)",
       "Bash(python -m pytest tests/test_history.py::test_build_history_attaches_empty_lists_when_no_data -v)",
-      "Bash(python -m pytest tests/test_history.py -v --tb=short)"
+      "Bash(python -m pytest tests/test_history.py -v --tb=short)",
+      "Bash(git *)",
+      "WebFetch(domain:app.swaggerhub.com)",
+      "WebFetch(domain:api.swaggerhub.com)",
+      "Bash(ls tests/)",
+      "Bash(ls docs/superpowers/)",
+      "Bash(xargs grep *)",
+      "Bash(python -m pytest tests/test_perch.py::test_perch_db_config_exists -v)",
+      "Bash(python *)"
     ]
   }
 }
