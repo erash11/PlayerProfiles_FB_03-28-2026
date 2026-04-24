@@ -25,6 +25,11 @@ _Z_MAP = {
     "peak_force_n":        "peak_force_n_z",
     "rfd_100ms":           "rfd_100ms_z",
     "rfd_200ms":           "rfd_200ms_z",
+    # Weight Room
+    "bs_1rm_bw":           "bs_1rm_bw_z",
+    "pc_1rm_bw":           "pc_1rm_bw_z",
+    "bp_1rm_bw":           "bp_1rm_bw_z",
+    "hpc_1rm_bw":          "hpc_1rm_bw_z",
 }
 
 
@@ -104,7 +109,7 @@ def _gps_rolling(df_athlete: pd.DataFrame) -> pd.DataFrame:
     return pd.DataFrame(result_rows)
 
 
-def build_history(athlete_records, cmj_hist, gps_hist, bw_hist, imtp_hist, pop_stats):
+def build_history(athlete_records, cmj_hist, gps_hist, bw_hist, imtp_hist, perch_hist, pop_stats):
     """
     Attaches *_history arrays to each athlete dict in athlete_records (in-place).
     pop_stats keys match snapshot raw column names (e.g. 'avg_hsd_m' for GPS).
@@ -115,10 +120,11 @@ def build_history(athlete_records, cmj_hist, gps_hist, bw_hist, imtp_hist, pop_s
     def _grp(df, col):
         return df.groupby(col) if not df.empty and col in df.columns else {}
 
-    cmj_grp  = _grp(cmj_hist,  "forcedecks_id")
-    imtp_grp = _grp(imtp_hist, "forcedecks_id")
-    bw_grp   = _grp(bw_hist,   "name_normalized")
-    gps_grp  = _grp(gps_hist,  "catapult_id")
+    cmj_grp   = _grp(cmj_hist,   "forcedecks_id")
+    imtp_grp  = _grp(imtp_hist,  "forcedecks_id")
+    bw_grp    = _grp(bw_hist,    "name_normalized")
+    gps_grp   = _grp(gps_hist,   "catapult_id")
+    perch_grp = _grp(perch_hist, "forcedecks_id")
 
     for rec in athlete_records:
         fd_id     = rec.get("forcedecks_id")
@@ -196,6 +202,31 @@ def build_history(athlete_records, cmj_hist, gps_hist, bw_hist, imtp_hist, pop_s
                     "gps_domain_t":     _domain_t([hsd_t, pl_t, mv_t]),
                 })
 
+        # ── Perch / Weight Room ──
+        rec["perch_history"] = []
+        if fd_id and hasattr(perch_grp, "groups") and fd_id in perch_grp.groups:
+            for _, row in perch_grp.get_group(fd_id).iterrows():
+                bs  = row.get("bs_1rm_bw")
+                pc  = row.get("pc_1rm_bw")
+                bp  = row.get("bp_1rm_bw")
+                hpc = row.get("hpc_1rm_bw")
+                bs_t  = _t_score_val(bs,  pop_stats.get("bs_1rm_bw",  {}))
+                pc_t  = _t_score_val(pc,  pop_stats.get("pc_1rm_bw",  {}))
+                bp_t  = _t_score_val(bp,  pop_stats.get("bp_1rm_bw",  {}))
+                hpc_t = _t_score_val(hpc, pop_stats.get("hpc_1rm_bw", {}))
+                rec["perch_history"].append({
+                    "date":         str(row["test_date"])[:10],
+                    "bs_1rm_bw":    _safe(bs),
+                    "pc_1rm_bw":    _safe(pc),
+                    "bp_1rm_bw":    _safe(bp),
+                    "hpc_1rm_bw":   _safe(hpc),
+                    "bs_1rm_bw_t":  bs_t,
+                    "pc_1rm_bw_t":  pc_t,
+                    "bp_1rm_bw_t":  bp_t,
+                    "hpc_1rm_bw_t": hpc_t,
+                    "wr_domain_t":  _domain_t([bs_t, pc_t, bp_t, hpc_t]),
+                })
+
 
 def render(
     df_scored: pd.DataFrame,
@@ -204,6 +235,7 @@ def render(
     gps_hist: pd.DataFrame,
     bw_hist: pd.DataFrame,
     imtp_hist: pd.DataFrame,
+    perch_hist: pd.DataFrame,
     label: str,
     start_date: str,
     end_date: str,
@@ -216,13 +248,16 @@ def render(
         "jump_height_cm", "peak_power_bm", "mrsi",
         "avg_hsd_m", "avg_player_load", "avg_max_velocity_ms", "weight_kg",
         "peak_force_n", "peak_force_bm", "rfd_100ms", "rfd_200ms",
+        "bs_1rm_bw", "pc_1rm_bw", "bp_1rm_bw", "hpc_1rm_bw",
         "jump_height_t", "peak_power_bm_t", "mrsi_t",
         "hsd_t", "player_load_t", "max_vel_t", "weight_t",
         "peak_force_bm_t", "peak_force_n_t", "rfd_100ms_t", "rfd_200ms_t",
+        "bs_1rm_bw_t", "pc_1rm_bw_t", "bp_1rm_bw_t", "hpc_1rm_bw_t",
         "jump_height_z", "peak_power_bm_z", "mrsi_z",
         "hsd_z", "player_load_z", "max_vel_z", "weight_z",
         "peak_force_bm_z", "peak_force_n_z", "rfd_100ms_z", "rfd_200ms_z",
-        "cmj_domain", "gps_domain", "bw_domain", "strength_domain",
+        "bs_1rm_bw_z", "pc_1rm_bw_z", "bp_1rm_bw_z", "hpc_1rm_bw_z",
+        "cmj_domain", "gps_domain", "bw_domain", "strength_domain", "weight_room_domain",
         "tsa_score", "tsa_rank", "rag", "missing_domains",
     ]
     cols = [c for c in include_cols if c in df.columns]
@@ -243,20 +278,22 @@ def render(
         records.append(rec)
 
     # Attach longitudinal history arrays to each athlete record
-    build_history(records, cmj_hist, gps_hist, bw_hist, imtp_hist, pop_stats)
+    build_history(records, cmj_hist, gps_hist, bw_hist, imtp_hist, perch_hist, pop_stats)
 
     # Team averages
     numeric_cols = [
         "jump_height_cm", "peak_power_bm", "mrsi",
         "avg_hsd_m", "avg_player_load", "avg_max_velocity_ms", "weight_kg",
         "peak_force_n", "peak_force_bm", "rfd_100ms", "rfd_200ms",
+        "bs_1rm_bw", "pc_1rm_bw", "bp_1rm_bw", "hpc_1rm_bw",
     ]
     team_avg = {c: _safe(df[c].mean()) if c in df.columns else None for c in numeric_cols}
 
-    cmj_count  = int(df["jump_height_cm"].notna().sum()) if "jump_height_cm" in df.columns else 0
-    gps_count  = int(df["avg_hsd_m"].notna().sum())      if "avg_hsd_m" in df.columns else 0
-    bw_count   = int(df["weight_kg"].notna().sum())       if "weight_kg" in df.columns else 0
-    imtp_count = int(df["peak_force_bm"].notna().sum())   if "peak_force_bm" in df.columns else 0
+    cmj_count   = int(df["jump_height_cm"].notna().sum()) if "jump_height_cm" in df.columns else 0
+    gps_count   = int(df["avg_hsd_m"].notna().sum())      if "avg_hsd_m" in df.columns else 0
+    bw_count    = int(df["weight_kg"].notna().sum())       if "weight_kg" in df.columns else 0
+    imtp_count  = int(df["peak_force_bm"].notna().sum())   if "peak_force_bm" in df.columns else 0
+    perch_count = int(df["bs_1rm_bw"].notna().sum())       if "bs_1rm_bw" in df.columns else 0
 
     positions = sorted(df["position"].dropna().unique().tolist())
 
@@ -275,5 +312,6 @@ def render(
         gps_count=gps_count,
         bw_count=bw_count,
         imtp_count=imtp_count,
+        perch_count=perch_count,
         positions=positions,
     )

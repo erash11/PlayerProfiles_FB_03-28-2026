@@ -139,12 +139,16 @@ def test_build_history_attaches_empty_lists_when_no_data():
     empty_df_bw   = pd.DataFrame(columns=["name_normalized", "date", "weight_kg"])
     empty_df_gps  = pd.DataFrame(columns=["catapult_id", "session_date", "hsd_m", "player_load", "max_velocity_ms"])
 
-    build_history(athletes, empty_df_cmj, empty_df_gps, empty_df_bw, empty_df_imtp, pop_stats)
+    empty_perch = pd.DataFrame(columns=["forcedecks_id", "test_date",
+                                         "bs_1rm_bw", "pc_1rm_bw", "bp_1rm_bw", "hpc_1rm_bw"])
+    build_history(athletes, empty_df_cmj, empty_df_gps, empty_df_bw, empty_df_imtp,
+                  empty_perch, pop_stats)
 
-    assert athletes[0]["cmj_history"]  == []
-    assert athletes[0]["gps_history"]  == []
-    assert athletes[0]["bw_history"]   == []
-    assert athletes[0]["imtp_history"] == []
+    assert athletes[0]["cmj_history"]   == []
+    assert athletes[0]["gps_history"]   == []
+    assert athletes[0]["bw_history"]    == []
+    assert athletes[0]["imtp_history"]  == []
+    assert athletes[0]["perch_history"] == []
 
 
 def test_build_history_cmj_t_scores():
@@ -179,6 +183,7 @@ def test_build_history_cmj_t_scores():
         empty(["catapult_id","session_date","hsd_m","player_load","max_velocity_ms"]),
         empty(["name_normalized","date","weight_kg"]),
         empty(["forcedecks_id","test_date","peak_force_n","peak_force_bm","rfd_100ms","rfd_200ms"]),
+        empty(["forcedecks_id","test_date","bs_1rm_bw","pc_1rm_bw","bp_1rm_bw","hpc_1rm_bw"]),
         pop_stats,
     )
 
@@ -187,6 +192,80 @@ def test_build_history_cmj_t_scores():
     assert h[0]["date"] == "2025-09-05"
     assert h[0]["jump_height_cm"] == pytest.approx(70.0)
     assert h[0]["jump_height_t"]  == pytest.approx(60.0, abs=0.5)   # z=1 → t=60
+
+
+def _make_pop_stats_with_perch():
+    return {
+        "jump_height_cm":      {"mean": 65.0,   "std": 5.0},
+        "peak_power_bm":       {"mean": 22.0,   "std": 2.0},
+        "mrsi":                {"mean": 2.5,    "std": 0.3},
+        "avg_hsd_m":           {"mean": 450.0,  "std": 50.0},
+        "avg_player_load":     {"mean": 110.0,  "std": 15.0},
+        "avg_max_velocity_ms": {"mean": 8.0,    "std": 0.5},
+        "weight_kg":           {"mean": 90.0,   "std": 10.0},
+        "peak_force_bm":       {"mean": 30.0,   "std": 3.0},
+        "peak_force_n":        {"mean": 2700.0, "std": 400.0},
+        "rfd_100ms":           {"mean": 7500.0, "std": 1000.0},
+        "rfd_200ms":           {"mean": 6000.0, "std": 800.0},
+        "bs_1rm_bw":           {"mean": 2.0,    "std": 0.3},
+        "pc_1rm_bw":           {"mean": 1.4,    "std": 0.2},
+        "bp_1rm_bw":           {"mean": 1.2,    "std": 0.2},
+        "hpc_1rm_bw":          {"mean": 1.3,    "std": 0.2},
+    }
+
+
+def test_build_history_attaches_perch_history():
+    from src.renderer import build_history
+
+    athletes = [{"forcedecks_id": "fd1", "catapult_id": None, "full_name": "Alice Smith"}]
+    pop_stats = _make_pop_stats_with_perch()
+    empty = lambda cols: pd.DataFrame(columns=cols)
+
+    perch_hist = pd.DataFrame([{
+        "forcedecks_id": "fd1",
+        "test_date":     "2025-10-15",
+        "bs_1rm_bw":     2.3,
+        "pc_1rm_bw":     1.6,
+        "bp_1rm_bw":     None,
+        "hpc_1rm_bw":    None,
+    }])
+
+    build_history(
+        athletes,
+        empty(["forcedecks_id","test_date","jump_height_cm","peak_power_bm","mrsi"]),
+        empty(["catapult_id","session_date","hsd_m","player_load","max_velocity_ms"]),
+        empty(["name_normalized","date","weight_kg"]),
+        empty(["forcedecks_id","test_date","peak_force_n","peak_force_bm","rfd_100ms","rfd_200ms"]),
+        perch_hist,
+        pop_stats,
+    )
+
+    h = athletes[0]["perch_history"]
+    assert len(h) == 1
+    assert h[0]["date"] == "2025-10-15"
+    assert h[0]["bs_1rm_bw"] == pytest.approx(2.3)
+    assert h[0]["bs_1rm_bw_t"] == pytest.approx(60.0, abs=1.0)  # z=(2.3-2.0)/0.3=1 → t=60
+    assert h[0]["bp_1rm_bw"] is None
+
+
+def test_build_history_empty_perch_attaches_empty_list():
+    from src.renderer import build_history
+
+    athletes = [{"forcedecks_id": "fd1", "catapult_id": None, "full_name": "Alice Smith"}]
+    pop_stats = _make_pop_stats_with_perch()
+    empty = lambda cols: pd.DataFrame(columns=cols)
+
+    build_history(
+        athletes,
+        empty(["forcedecks_id","test_date","jump_height_cm","peak_power_bm","mrsi"]),
+        empty(["catapult_id","session_date","hsd_m","player_load","max_velocity_ms"]),
+        empty(["name_normalized","date","weight_kg"]),
+        empty(["forcedecks_id","test_date","peak_force_n","peak_force_bm","rfd_100ms","rfd_200ms"]),
+        empty(["forcedecks_id","test_date","bs_1rm_bw","pc_1rm_bw","bp_1rm_bw","hpc_1rm_bw"]),
+        pop_stats,
+    )
+
+    assert athletes[0]["perch_history"] == []
 
 
 # ── Weight Room domain tests ──────────────────────────────────────────────────
