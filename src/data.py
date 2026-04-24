@@ -537,20 +537,22 @@ def load_perch_history(start_date: str, end_date: str) -> pd.DataFrame:
 
 def merge_all(start_date: str, end_date: str) -> pd.DataFrame:
     """
-    Joins CMJ, GPS, and body weight onto the athlete roster crosswalk.
-    Athletes missing a domain get NaN for that domain's metrics.
+    Joins CMJ, GPS, body weight, IMTP, and Perch 1RM onto the athlete roster crosswalk.
+    Athletes missing any domain get NaN for that domain's metrics.
     """
     roster = pd.read_csv(ROSTER_CSV)
     roster["name_normalized"] = roster["full_name"].apply(_normalize_name)
 
-    cmj  = load_cmj(start_date, end_date)
-    gps  = load_gps(start_date, end_date)
-    bw   = load_bodyweight(end_date)
-    imtp = load_imtp(start_date, end_date)
+    cmj   = load_cmj(start_date, end_date)
+    gps   = load_gps(start_date, end_date)
+    bw    = load_bodyweight(end_date)
+    imtp  = load_imtp(start_date, end_date)
+    perch = load_perch(start_date, end_date)
 
-    df = roster.merge(cmj,  on="forcedecks_id", how="left")
-    df = df.merge(gps,  on="catapult_id",   how="left")
-    df = df.merge(bw,   on="name_normalized", how="left")
-    df = df.merge(imtp, on="forcedecks_id", how="left")
+    df = roster.merge(cmj,   on="forcedecks_id",  how="left")
+    df = df.merge(gps,   on="catapult_id",    how="left")
+    df = df.merge(bw,    on="name_normalized", how="left")
+    df = df.merge(imtp,  on="forcedecks_id",  how="left")
+    df = df.merge(perch, on="forcedecks_id",  how="left")
 
     return df

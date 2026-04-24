@@ -134,6 +134,31 @@ def test_load_perch_missing_db_returns_empty():
 
 # ── load_perch_history() tests ────────────────────────────────────────────────
 
+def test_merge_all_includes_perch_columns(tmp_path):
+    """merge_all() result has bs_1rm_bw column (NaN for all when no Perch DB)."""
+    from unittest.mock import patch
+    import pandas as pd
+    from src.data import merge_all
+
+    roster = _make_roster_csv(tmp_path)
+    bw     = _make_bw_csv(tmp_path)
+
+    empty_fp   = pd.DataFrame(columns=["forcedecks_id", "jump_height_cm", "peak_power_bm", "mrsi"])
+    empty_gps  = pd.DataFrame(columns=["catapult_id", "avg_hsd_m", "avg_player_load", "avg_max_velocity_ms"])
+    empty_imtp = pd.DataFrame(columns=["forcedecks_id", "peak_force_n", "peak_force_bm", "rfd_100ms", "rfd_200ms"])
+
+    with patch("src.data.PERCH_DB", "/nonexistent/perch.duckdb"), \
+         patch("src.data.ROSTER_CSV", roster), \
+         patch("src.data.BODYWEIGHT_CSV", bw), \
+         patch("src.data.load_cmj",  return_value=empty_fp), \
+         patch("src.data.load_gps",  return_value=empty_gps), \
+         patch("src.data.load_imtp", return_value=empty_imtp):
+        df = merge_all("2025-09-01", "2026-03-28")
+
+    assert "bs_1rm_bw" in df.columns, "merge_all() must include bs_1rm_bw"
+    assert df["bs_1rm_bw"].isna().all(), "No Perch DB → all NaN"
+
+
 def test_load_perch_history_multiple_dates(tmp_path):
     """History loader returns one row per date (not just most recent)."""
     from unittest.mock import patch
