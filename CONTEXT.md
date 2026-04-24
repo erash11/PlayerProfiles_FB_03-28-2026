@@ -75,6 +75,24 @@ A Python-based static HTML report generator. Run `generate_report.py` before a m
 
 ---
 
+## Perch API Integration (Design Complete 2026-04-23 — Implementation Pending)
+
+Design decisions locked in brainstorming session:
+
+- **5th TSA domain: "Weight Room"** — sits alongside CMJ, GPS, BW, Strength
+- **Exercises:** back squat, power clean, bench press, hang power clean
+- **Metric:** 1RM (from Perch `/stats` ONE_RM field), normalized by bodyweight (1RM ÷ BW, both lbs)
+- **Scoring:** 4 t-scores (one per exercise 1RM/BW) → Weight Room domain mean → TSA = mean of 5 domains
+- **Radar:** Weight Room shows as a **single composite axis** (not 4 individual axes) → radar stays clean at 5 domain-level axes. Individual exercise 1RMs shown in profile panel only (same pattern as IMTP RFD display-only metrics).
+- **Athlete join:** name-match from Perch `/v2/users` endpoint → normalized name → `athlete_roster.csv`. Same `_normalize_name()` pattern as BW CSV.
+- **Ingestion:** `src/perch_ingest.py` → `data/perch.duckdb` (local cache). Run separately before generating report, similar to ForcePlate pipeline. Path added to `config.py`.
+- **Auth:** Bearer token in `.env` as `PERCH_API_TOKEN`.
+- **API pagination:** `/stats` and `/sets` use `next_token`; ingest must handle pagination.
+
+**Next step:** invoke writing-plans skill to create implementation plan.
+
+---
+
 ## Known Issues / Future Improvements
 
 1. **Jersey numbers blank** — fill `data/athlete_roster.csv` manually for UI display.
