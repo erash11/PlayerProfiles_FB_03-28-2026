@@ -247,3 +247,54 @@ def test_load_fd_bw_unreachable_returns_empty():
     assert df.empty
     assert "forcedecks_id" in df.columns
     assert "weight_kg" in df.columns
+
+
+# ── _load_bw_combined() tests ─────────────────────────────────────────────────
+
+def test_load_bw_combined_csv_wins(tmp_path):
+    """_load_bw_combined: athlete in CSV gets CSV weight, not FD weight."""
+    fd_db = _make_fd_db(tmp_path, [
+        {"test_id": "t1", "athlete_id": "fd1", "test_date": "2025-10-01",
+         "metric_name": "Bodyweight in Kilograms", "metric_value": 99.0},  # should be ignored
+    ])
+    roster = _make_roster_csv(tmp_path)
+    bw     = _make_bw_csv(tmp_path)  # Alice = 150 lbs → 68.04 kg
+
+    from src.data import _load_bw_combined
+    from unittest.mock import patch
+    with patch("src.data.FORCEPLATE_DB", fd_db), \
+         patch("src.data.ROSTER_CSV", roster), \
+         patch("src.data.BODYWEIGHT_CSV", bw):
+        df = _load_bw_combined("2025-09-01", "2026-03-28")
+
+    alice = df[df["name_normalized"] == "alice smith"]
+    assert len(alice) == 1
+    assert alice["weight_kg"].iloc[0] == pytest.approx(150 * 0.453592, rel=1e-4)
+
+
+def test_load_bw_combined_fd_fills_csv_gap(tmp_path):
+    """_load_bw_combined: athlete missing from CSV gets FD weight."""
+    bw_bob_only = str(tmp_path / "bw_bob_only.csv")
+    with open(bw_bob_only, "w") as f:
+        f.write("DATE,NAME,WEIGHT,POS\n")
+        f.write('10/01/2025,"Jones, Bob",220,OL\n')  # Alice not in CSV
+
+    fd_db = _make_fd_db(tmp_path, [
+        {"test_id": "t1", "athlete_id": "fd1", "test_date": "2025-10-01",
+         "metric_name": "Bodyweight in Kilograms", "metric_value": 75.0},
+    ])
+    roster = _make_roster_csv(tmp_path)  # fd1=Alice, fd2=Bob
+
+    from src.data import _load_bw_combined
+    from unittest.mock import patch
+    with patch("src.data.FORCEPLATE_DB", fd_db), \
+         patch("src.data.ROSTER_CSV", roster), \
+         patch("src.data.BODYWEIGHT_CSV", bw_bob_only):
+        df = _load_bw_combined("2025-09-01", "2026-03-28")
+
+    alice = df[df["name_normalized"] == "alice smith"]
+    assert len(alice) == 1
+    assert alice["weight_kg"].iloc[0] == pytest.approx(75.0, rel=1e-4)
+    bob = df[df["name_normalized"] == "bob jones"]
+    assert len(bob) == 1
+    assert bob["weight_kg"].iloc[0] == pytest.approx(220 * 0.453592, rel=1e-4)

@@ -430,6 +430,33 @@ def _load_fd_bw(start_date: str, end_date: str) -> pd.DataFrame:
         return pd.DataFrame(columns=["forcedecks_id", "weight_kg"])
 
 
+def _load_bw_combined(start_date: str, end_date: str) -> pd.DataFrame:
+    """
+    Body weight per athlete: CSV primary, ForceDecks raw_tests fallback.
+    Returns: name_normalized, weight_kg
+    CSV value wins; FD fills gaps for roster athletes missing from CSV.
+    """
+    csv_bw = load_bodyweight(end_date)  # name_normalized, weight_kg
+
+    fd_bw = _load_fd_bw(start_date, end_date)
+    if fd_bw.empty:
+        return csv_bw
+
+    roster = pd.read_csv(ROSTER_CSV)
+    roster["name_normalized"] = roster["full_name"].apply(_normalize_name)
+    fd_named = fd_bw.merge(
+        roster[["forcedecks_id", "name_normalized"]], on="forcedecks_id", how="inner"
+    )[["name_normalized", "weight_kg"]].rename(columns={"weight_kg": "weight_kg_fd"})
+
+    combined = csv_bw.merge(fd_named, on="name_normalized", how="outer")
+    combined["weight_kg"] = combined["weight_kg"].combine_first(combined["weight_kg_fd"])
+    return (
+        combined[["name_normalized", "weight_kg"]]
+        .dropna(subset=["weight_kg"])
+        .reset_index(drop=True)
+    )
+
+
 def load_perch(start_date: str, end_date: str) -> pd.DataFrame:
     """
     Most recent 1RM per exercise per athlete within [start_date, end_date],
