@@ -403,9 +403,9 @@ def _load_bw_lbs(end_date: str) -> pd.DataFrame:
     return df[["name_normalized", "weight_lbs"]]
 
 
-def _load_fd_bw(start_date: str, end_date: str) -> pd.DataFrame:
+def _load_fd_bw(end_date: str) -> pd.DataFrame:
     """
-    Most recent ForceDecks body weight per athlete within [start_date, end_date].
+    Most recent ForceDecks body weight per athlete on or before end_date.
     Returns: forcedecks_id, weight_kg (kg — native FD unit).
     Returns empty DataFrame if DB is unreachable or has no matching rows.
     """
@@ -438,7 +438,7 @@ def _load_bw_combined(start_date: str, end_date: str) -> pd.DataFrame:
     """
     csv_bw = load_bodyweight(end_date)  # name_normalized, weight_kg
 
-    fd_bw = _load_fd_bw(start_date, end_date)
+    fd_bw = _load_fd_bw(end_date)
     if fd_bw.empty:
         return csv_bw.dropna(subset=["weight_kg"]).reset_index(drop=True)
 
@@ -519,7 +519,7 @@ def load_perch(start_date: str, end_date: str) -> pd.DataFrame:
     bw = _load_bw_lbs(end_date)
     pivoted = pivoted.merge(bw, on="name_normalized", how="left")
 
-    fd_bw = _load_fd_bw(start_date, end_date)
+    fd_bw = _load_fd_bw(end_date)
     if not fd_bw.empty:
         fd_bw_lbs = fd_bw.assign(weight_lbs_fd=fd_bw["weight_kg"] / 0.453592)[["forcedecks_id", "weight_lbs_fd"]]
         pivoted = pivoted.merge(fd_bw_lbs, on="forcedecks_id", how="left")
@@ -585,7 +585,7 @@ def load_perch_history(start_date: str, end_date: str) -> pd.DataFrame:
     bw = _load_bw_lbs(end_date)
     pivoted = pivoted.merge(bw, on="name_normalized", how="left")
 
-    fd_bw = _load_fd_bw(start_date, end_date)
+    fd_bw = _load_fd_bw(end_date)
     if not fd_bw.empty:
         fd_bw_lbs = fd_bw.assign(weight_lbs_fd=fd_bw["weight_kg"] / 0.453592)[["forcedecks_id", "weight_lbs_fd"]]
         pivoted = pivoted.merge(fd_bw_lbs, on="forcedecks_id", how="left")

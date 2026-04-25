@@ -228,7 +228,7 @@ def test_load_fd_bw_returns_most_recent(tmp_path):
     from src.data import _load_fd_bw
     from unittest.mock import patch
     with patch("src.data.FORCEPLATE_DB", db):
-        df = _load_fd_bw("2025-09-01", "2026-03-28")
+        df = _load_fd_bw("2026-03-28")
 
     assert len(df) == 2
     fd1 = df[df["forcedecks_id"] == "fd1"]
@@ -242,11 +242,27 @@ def test_load_fd_bw_unreachable_returns_empty():
     from src.data import _load_fd_bw
     from unittest.mock import patch
     with patch("src.data.FORCEPLATE_DB", "/nonexistent/path.db"):
-        df = _load_fd_bw("2025-09-01", "2026-03-28")
+        df = _load_fd_bw("2026-03-28")
 
     assert df.empty
     assert "forcedecks_id" in df.columns
     assert "weight_kg" in df.columns
+
+
+def test_load_fd_bw_includes_pre_period_record(tmp_path):
+    """_load_fd_bw includes BW recorded before start_date (no lower bound — matches load_bodyweight behavior)."""
+    db = _make_fd_db(tmp_path, [
+        {"test_id": "t1", "athlete_id": "fd1", "test_date": "2024-06-01",
+         "metric_name": "Bodyweight in Kilograms", "metric_value": 78.0},
+    ])
+    from src.data import _load_fd_bw
+    from unittest.mock import patch
+    with patch("src.data.FORCEPLATE_DB", db):
+        df = _load_fd_bw("2026-03-28")
+
+    fd1 = df[df["forcedecks_id"] == "fd1"]
+    assert len(fd1) == 1, "Pre-period record should be included (no lower bound)"
+    assert fd1["weight_kg"].iloc[0] == pytest.approx(78.0)
 
 
 # ── _load_bw_combined() tests ─────────────────────────────────────────────────
