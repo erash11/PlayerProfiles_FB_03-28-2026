@@ -75,18 +75,27 @@ A Python-based static HTML report generator. Run `generate_report.py` before a m
 
 ---
 
-## Perch API Integration (fully implemented 2026-04-24)
+## Perch API Integration (pipeline verified and data ingested 2026-04-25)
 
 Design decisions locked in brainstorming session (2026-04-23):
 
 - **5th TSA domain: "Weight Room"** — sits alongside CMJ, GPS, BW, Strength
 - **Exercises:** back squat, power clean, bench press, hang power clean
-- **Metric:** 1RM (from Perch `/stats` ONE_RM field), normalized by bodyweight (1RM ÷ BW, both lbs)
+- **Metric:** 1RM computed as `weight / pct_1rm` per set from `/v3/sets`, normalized by bodyweight (1RM ÷ BW, both lbs)
 - **Scoring:** 4 t-scores (one per exercise 1RM/BW) → Weight Room domain mean → TSA = mean of 5 domains
 - **Radar:** Weight Room shows as a **single composite axis** (not 4 individual axes) → radar stays clean. Individual exercise 1RMs shown in profile panel only.
 - **Athlete join:** name-match from Perch `/v2/users` endpoint → normalized name → `athlete_roster.csv`. Same `_normalize_name()` pattern as BW CSV.
-- **Auth:** Bearer token in `.env` as `PERCH_API_TOKEN`. Copy `.env.example` → `.env`.
-- **API pagination:** `/stats` and `/sets` use `next_token`; ingest handles pagination.
+- **Auth:** `Bearer` token in `.env` as `PERCH_API_TOKEN`. Copy `.env.example` → `.env`.
+- **API pagination:** `/v2/users` and `/v3/sets` use `next_token`; ingest handles pagination.
+
+### API details (confirmed 2026-04-25)
+
+- **Base URL:** `https://api.perch.fit`
+- **Auth scheme:** `Authorization: Bearer <token>` (not JWT despite API error message on first attempt)
+- **Users:** `POST /v2/users` with `{"group_id": org_id}`. Org ID from `GET /v2/user` → `data.org_id` (Baylor = 959).
+- **Sets/1RM:** `POST /v3/sets` with `{"group_id": 959, "exercise_id": <id>}`. Returns newest-first; stop paginating when `created_at < start_ts`. 1RM = `weight / pct_1rm` (pct_1rm is 0–1 decimal). Skip records where `pct_1rm` is null.
+- **Exercise IDs:** Back Squat=1, Bench Press=2, Power Clean=19, Hang Power Clean=48 (in `_EXERCISE_ID_MAP`).
+- **The `/stats` endpoint returns empty** for this org — do not use it.
 
 ### What was built (2026-04-24) — full implementation
 
@@ -94,7 +103,7 @@ Design decisions locked in brainstorming session (2026-04-23):
 - `config.py` — added `PERCH_DB` path (`data/perch.duckdb`)
 - `requirements.txt` — added `requests>=2.31.0`, `python-dotenv>=1.0.0`
 - `.env.example` — token template
-- `src/perch_ingest.py` — full ingest script: `ensure_schema()`, `upsert_rows()`, `fetch_users()`, `fetch_stats()` (paginated), `ingest()`, CLI with `--start`/`--end`/`--probe`
+- `src/perch_ingest.py` — full ingest script: `ensure_schema()`, `upsert_rows()`, `fetch_users()`, `fetch_sets_1rm()` (paginated per exercise), `ingest()`, CLI with `--start`/`--end`/`--probe`
 
 **Data / scoring / rendering:**
 - `src/data.py` — `load_perch()`, `load_perch_history()`, `_load_bw_lbs()`, updated `merge_all()`
@@ -109,15 +118,16 @@ Design decisions locked in brainstorming session (2026-04-23):
 
 **Implementation plan:** `docs/superpowers/plans/2026-04-24-perch-weight-room-domain.md` (all 9 tasks complete)
 
-### ⚠ First-time ingest setup
+### Ingest setup
 
 ```bash
-cp .env.example .env          # fill in PERCH_API_TOKEN
-python src/perch_ingest.py --start 2025-09-01 --end 2026-03-28 --probe
-# Verify field name constants in src/perch_ingest.py match actual API responses
-python src/perch_ingest.py --start 2025-09-01 --end 2026-03-28
-# Then regenerate the report — Weight Room domain activates automatically
+cp .env.example .env                                            # fill in PERCH_API_TOKEN
+python src/perch_ingest.py --probe                              # verify connectivity (no dates needed)
+python src/perch_ingest.py --start 2025-09-01 --end 2026-03-28 # full ingest
+# Weight Room domain activates automatically once data/perch.duckdb is populated
 ```
+
+**Season ingest result (2026-04-25):** 436 athletes in org, 12,300 rows upserted across 4 exercises (Back Squat 16 pages, Bench Press 17 pages, Power Clean 29 pages, Hang Power Clean 2 pages). DB: `data/perch.duckdb`.
 
 ---
 

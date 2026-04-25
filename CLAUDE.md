@@ -99,23 +99,27 @@ output/                 # generated HTML files (not committed)
 
 **Missing domain handling:** athletes missing any domain still get a TSA from available domains; a note appears in their profile panel.
 
-## Perch API Integration (fully implemented 2026-04-24)
+## Perch API Integration (pipeline verified and data ingested 2026-04-25)
 
-**API:** Bearer token auth. Docs at `https://app.swaggerhub.com/apis-docs/PerchFitness/perch-api/1.2.0`
+**API base:** `https://api.perch.fit` — Bearer token auth (`Authorization: Bearer <token>`).
 
 **Ingest script:** `src/perch_ingest.py` — run before generating the report:
 ```bash
-python src/perch_ingest.py --start 2025-09-01 --end 2026-03-28
-# Use --probe first to dump raw API responses and verify field name constants
+python src/perch_ingest.py --probe                              # verify connectivity (no dates needed)
+python src/perch_ingest.py --start 2025-09-01 --end 2026-03-28 # full ingest
 ```
 
-**⚠ First-time setup:** Run `--probe` to confirm that `PERCH_API_BASE`, field name constants (`_USER_ID_FIELD`, `_STAT_ONE_RM_FIELD`, `_STAT_EXERCISE_FIELD`, etc.), and `_EXERCISE_MAP` keys all match the live API. Constants are at the top of `src/perch_ingest.py`.
+**Data source:** `POST /v3/sets` filtered by `exercise_id` — NOT `/stats` (which returns empty). 1RM is computed as `weight / pct_1rm` per set where `pct_1rm` is set (0–1 decimal). Records are newest-first; ingest stops paginating when `created_at` falls before `start_date`.
+
+**Exercise IDs (confirmed):** Back Squat=1, Bench Press=2, Power Clean=19, Hang Power Clean=48. Defined in `_EXERCISE_ID_MAP` at top of `src/perch_ingest.py`.
+
+**Users endpoint:** `POST /v2/users` with `{"group_id": org_id}`. Org ID resolved dynamically from `GET /v2/user` → `data.org_id` (Baylor = 959).
 
 **Exercises tracked:** back squat, power clean, bench press, hang power clean.
 
-**Metric:** 1RM (from Perch `/stats` ONE_RM field), normalized by bodyweight (1RM ÷ BW, both in lbs).
+**Metric:** 1RM computed from `weight / pct_1rm` per set, normalized by bodyweight (1RM ÷ BW, both lbs).
 
-**Athlete join:** name-match from Perch `/v2/users` (first_name + last_name) to `athlete_roster.csv` full_name using same `_normalize_name()` pattern as BW CSV join.
+**Athlete join:** name-match from Perch `/v2/users` (first_name + last_name) to `athlete_roster.csv` full_name using `_normalize_name()`.
 
 **API token:** stored in `.env` as `PERCH_API_TOKEN` (never committed). Copy `.env.example` → `.env` to get started.
 
