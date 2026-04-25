@@ -599,7 +599,7 @@ def merge_all(start_date: str, end_date: str) -> pd.DataFrame:
 
     cmj   = load_cmj(start_date, end_date)
     gps   = load_gps(start_date, end_date)
-    bw    = load_bodyweight(end_date)
+    bw    = _load_bw_combined(start_date, end_date)
     imtp  = load_imtp(start_date, end_date)
     perch = load_perch(start_date, end_date)
 

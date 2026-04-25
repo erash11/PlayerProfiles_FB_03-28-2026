@@ -298,3 +298,40 @@ def test_load_bw_combined_fd_fills_csv_gap(tmp_path):
     bob = df[df["name_normalized"] == "bob jones"]
     assert len(bob) == 1
     assert bob["weight_kg"].iloc[0] == pytest.approx(220 * 0.453592, rel=1e-4)
+
+
+# ── merge_all() BW fallback test ──────────────────────────────────────────────
+
+def test_merge_all_bw_fallback_fills_missing_csv_athletes(tmp_path):
+    """merge_all(): athlete missing from BW CSV gets weight_kg from ForceDecks fallback."""
+    bw_bob_only = str(tmp_path / "bw_bob_only.csv")
+    with open(bw_bob_only, "w") as f:
+        f.write("DATE,NAME,WEIGHT,POS\n")
+        f.write('10/01/2025,"Jones, Bob",220,OL\n')  # Alice not in CSV
+
+    fd_db = _make_fd_db(tmp_path, [
+        {"test_id": "t1", "athlete_id": "fd1", "test_date": "2025-10-01",
+         "metric_name": "Bodyweight in Kilograms", "metric_value": 75.0},
+    ])
+    roster = _make_roster_csv(tmp_path)  # fd1=Alice, fd2=Bob
+
+    from src.data import merge_all
+    from unittest.mock import patch
+    import pandas as pd
+
+    empty_cmj  = pd.DataFrame(columns=["forcedecks_id", "jump_height_cm", "peak_power_bm", "mrsi"])
+    empty_gps  = pd.DataFrame(columns=["catapult_id", "avg_hsd_m", "avg_player_load", "avg_max_velocity_ms"])
+    empty_imtp = pd.DataFrame(columns=["forcedecks_id", "peak_force_n", "peak_force_bm", "rfd_100ms", "rfd_200ms"])
+
+    with patch("src.data.FORCEPLATE_DB", fd_db), \
+         patch("src.data.ROSTER_CSV", roster), \
+         patch("src.data.BODYWEIGHT_CSV", bw_bob_only), \
+         patch("src.data.PERCH_DB", "/nonexistent/perch.duckdb"), \
+         patch("src.data.load_cmj",  return_value=empty_cmj), \
+         patch("src.data.load_gps",  return_value=empty_gps), \
+         patch("src.data.load_imtp", return_value=empty_imtp):
+        df = merge_all("2025-09-01", "2026-03-28")
+
+    alice = df[df["forcedecks_id"] == "fd1"]
+    assert alice["weight_kg"].notna().all(), "Alice should have FD BW fallback weight"
+    assert alice["weight_kg"].iloc[0] == pytest.approx(75.0, rel=1e-4)
