@@ -419,10 +419,10 @@ def _load_fd_bw(start_date: str, end_date: str) -> pd.DataFrame:
                            ROW_NUMBER() OVER (PARTITION BY athlete_id ORDER BY test_date DESC) AS rn
                     FROM raw_tests
                     WHERE metric_name = 'Bodyweight in Kilograms'
-                      AND test_date BETWEEN ? AND ?
+                      AND test_date <= ?
                 ) t
                 WHERE rn = 1
-            """, [start_date, end_date]).df()
+            """, [end_date]).df()
         finally:
             conn.close()
         return result
@@ -440,7 +440,7 @@ def _load_bw_combined(start_date: str, end_date: str) -> pd.DataFrame:
 
     fd_bw = _load_fd_bw(start_date, end_date)
     if fd_bw.empty:
-        return csv_bw
+        return csv_bw.dropna(subset=["weight_kg"]).reset_index(drop=True)
 
     roster = pd.read_csv(ROSTER_CSV)
     roster["name_normalized"] = roster["full_name"].apply(_normalize_name)
