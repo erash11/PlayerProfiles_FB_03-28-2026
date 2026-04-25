@@ -519,6 +519,13 @@ def load_perch(start_date: str, end_date: str) -> pd.DataFrame:
     bw = _load_bw_lbs(end_date)
     pivoted = pivoted.merge(bw, on="name_normalized", how="left")
 
+    fd_bw = _load_fd_bw(start_date, end_date)
+    if not fd_bw.empty:
+        fd_bw_lbs = fd_bw.assign(weight_lbs_fd=fd_bw["weight_kg"] / 0.453592)[["forcedecks_id", "weight_lbs_fd"]]
+        pivoted = pivoted.merge(fd_bw_lbs, on="forcedecks_id", how="left")
+        pivoted["weight_lbs"] = pivoted["weight_lbs"].combine_first(pivoted["weight_lbs_fd"])
+        pivoted = pivoted.drop(columns=["weight_lbs_fd"])
+
     for ex in ["bs", "pc", "bp", "hpc"]:
         pivoted[f"{ex}_1rm_bw"] = pivoted[f"{ex}_1rm_lbs"] / pivoted["weight_lbs"]
 
@@ -577,6 +584,13 @@ def load_perch_history(start_date: str, end_date: str) -> pd.DataFrame:
     # Normalize by snapshot BW
     bw = _load_bw_lbs(end_date)
     pivoted = pivoted.merge(bw, on="name_normalized", how="left")
+
+    fd_bw = _load_fd_bw(start_date, end_date)
+    if not fd_bw.empty:
+        fd_bw_lbs = fd_bw.assign(weight_lbs_fd=fd_bw["weight_kg"] / 0.453592)[["forcedecks_id", "weight_lbs_fd"]]
+        pivoted = pivoted.merge(fd_bw_lbs, on="forcedecks_id", how="left")
+        pivoted["weight_lbs"] = pivoted["weight_lbs"].combine_first(pivoted["weight_lbs_fd"])
+        pivoted = pivoted.drop(columns=["weight_lbs_fd"])
 
     for ex in ["bs", "pc", "bp", "hpc"]:
         pivoted[f"{ex}_1rm_bw"] = pivoted[f"{ex}_1rm_lbs"] / pivoted["weight_lbs"]

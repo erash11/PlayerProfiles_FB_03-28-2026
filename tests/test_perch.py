@@ -335,3 +335,38 @@ def test_merge_all_bw_fallback_fills_missing_csv_athletes(tmp_path):
     alice = df[df["forcedecks_id"] == "fd1"]
     assert alice["weight_kg"].notna().all(), "Alice should have FD BW fallback weight"
     assert alice["weight_kg"].iloc[0] == pytest.approx(75.0, rel=1e-4)
+
+
+# ── load_perch() BW fallback test ─────────────────────────────────────────────
+
+def test_load_perch_bw_fallback_computes_ratio_for_missing_csv_athlete(tmp_path):
+    """load_perch(): athlete not in BW CSV gets 1RM/BW ratio via FD BW fallback."""
+    bw_bob_only = str(tmp_path / "bw_bob_only.csv")
+    with open(bw_bob_only, "w") as f:
+        f.write("DATE,NAME,WEIGHT,POS\n")
+        f.write('10/01/2025,"Jones, Bob",220,OL\n')  # Alice not in CSV
+
+    perch_db = _make_perch_db(tmp_path, [
+        {"name_normalized": "alice smith", "perch_user_id": "u1",
+         "exercise": "Back Squat", "one_rm_lbs": 225.0, "test_date": "2025-10-15"},
+    ])
+    # Alice BW in FD: 75 kg = 165.35 lbs → BS ratio = 225 / 165.35 ≈ 1.361
+    fd_db = _make_fd_db(tmp_path, [
+        {"test_id": "t1", "athlete_id": "fd1", "test_date": "2025-10-01",
+         "metric_name": "Bodyweight in Kilograms", "metric_value": 75.0},
+    ])
+    roster = _make_roster_csv(tmp_path)  # fd1=Alice, fd2=Bob
+
+    from src.data import load_perch
+    from unittest.mock import patch
+    with patch("src.data.PERCH_DB", perch_db), \
+         patch("src.data.FORCEPLATE_DB", fd_db), \
+         patch("src.data.ROSTER_CSV", roster), \
+         patch("src.data.BODYWEIGHT_CSV", bw_bob_only):
+        df = load_perch("2025-09-01", "2026-03-28")
+
+    alice = df[df["forcedecks_id"] == "fd1"]
+    assert len(alice) == 1
+    assert alice["bs_1rm_bw"].notna().all(), "Alice should have bs_1rm_bw via FD BW fallback"
+    expected = 225.0 / (75.0 / 0.453592)  # 225 lbs / 165.35 lbs ≈ 1.361
+    assert alice["bs_1rm_bw"].iloc[0] == pytest.approx(expected, rel=1e-3)
