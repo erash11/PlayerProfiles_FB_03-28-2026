@@ -14,7 +14,8 @@
       "Bash(ls docs/superpowers/)",
       "Bash(xargs grep *)",
       "Bash(python -m pytest tests/test_perch.py::test_perch_db_config_exists -v)",
-      "Bash(python *)"
+      "Bash(python *)",
+      "Skill(claude-md-management:revise-claude-md)"
     ]
   }
 }

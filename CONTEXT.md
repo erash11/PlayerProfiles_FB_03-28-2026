@@ -161,6 +161,16 @@ python src/perch_ingest.py --start 2025-09-01 --end 2026-03-28
 - **IMTP ingestion added 2026-03-29:** `imtp_tests` table in `forceplate.db` stores 4 metrics per test: `"Peak Vertical Force"`, `"Peak Vertical Force / BM"`, `"RFD - 100ms"`, `"RFD - 200ms"`. VALD API test_type string is `"IMTP"`. Config in `config/thresholds.yaml` under `imtp_test_type` and `imtp_target_metrics`.
 - **To re-run IMTP ingestion:** `python -m src.ingest.pipeline --from 2025-09-01` from the ForcePlate_DecisionSystem directory (ingests both CMJ and IMTP in one pass).
 
+## Pipeline Automation (2026-04-25)
+
+- `C:/Users/eric_rash/Desktop/DEV/refresh_all_data.bat` — wrapper script that runs all three pipelines in sequence (ForcePlate → GPS → Perch) with per-step error reporting. Designed for Windows Task Scheduler (no `pause`).
+- **GPS entry point:** `bulk_import.py` (imports data); `run_report.py` only generates reports from existing data.
+- Season start hardcoded to `2025-09-01` at top of script — update each season.
+
+## Downstream Projects
+
+- **Risk_Stratification_Engine** (`C:/Users/eric_rash/Desktop/DEV/Risk_Stratification_Engine/`) reads the same canonical DB files via `config/paths.local.yaml` (already configured with correct paths). No copy needed — both projects read live files. `paths.example.yaml` is committed; `paths.local.yaml` is gitignored.
+
 ## GPS Pipeline Notes
 
 - Pipeline repo: `C:/Users/eric_rash/Desktop/DEV/DataBase_GPS_Reporting`

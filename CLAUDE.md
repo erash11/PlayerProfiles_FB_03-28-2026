@@ -26,6 +26,14 @@ python generate_report.py --start YYYY-MM-DD --end YYYY-MM-DD --label "Label"
 
 # Override output path
 python generate_report.py --start 2025-09-01 --end 2026-03-28 --label "Spring 2026" --output out/custom.html
+
+# Refresh all upstream pipelines (run before generating report)
+# Wrapper script: C:/Users/eric_rash/Desktop/DEV/refresh_all_data.bat
+
+# Individual pipeline updates:
+# python C:/Users/eric_rash/Desktop/DEV/ForcePlate_DecisionSystem/src/ingest/pipeline.py
+# cd C:/Users/eric_rash/Desktop/DEV/DataBase_GPS_Reporting/gps_report && python bulk_import.py --start 2025-09-01 --end <date>
+# python src/perch_ingest.py --start 2025-09-01 --end <date>
 ```
 
 ---
@@ -57,6 +65,8 @@ output/                 # generated HTML files (not committed)
 | Body Weight CSV | `C:/Users/eric_rash/Desktop/DEV/Football/BodWeightWeb/BodyWeightMaster.csv` | Built |
 | Roster crosswalk | `data/athlete_roster.csv` | Built |
 | Perch DB | `data/perch.duckdb` (local cache, populated by `src/perch_ingest.py`) | **Built** |
+
+**GPS pipeline note:** `bulk_import.py` imports data into the DB; `run_report.py` only generates reports from existing data — do not confuse them.
 
 **ForcePlate DB tables used:** `raw_tests` (CMJ metrics), `classified_athletes` (mRSI + CMJ classification), `imtp_tests` (IMTP metrics). IMTP data is ingested via the ForcePlate pipeline (`ForcePlate_DecisionSystem/src/ingest/pipeline.py`).
 
@@ -130,6 +140,10 @@ See [CONTEXT.md](CONTEXT.md) for full detail. Key deferred items:
 - **BW fallback** -- Fully implemented (2026-04-25). `_load_fd_bw()` and `_load_bw_combined()` in `src/data.py` fill gaps using `"Bodyweight in Kilograms"` from `raw_tests`. CSV wins; FD fills NaN. Wired into `merge_all()`, `load_perch()`, `load_perch_history()`.
 - **Position-specific normalization** -- v1 uses full-roster z-scores
 - **Jersey numbers** -- need manual entry in `data/athlete_roster.csv`
+
+## Downstream Projects
+
+**Risk_Stratification_Engine** (`C:/Users/eric_rash/Desktop/DEV/Risk_Stratification_Engine/`) reads the same canonical DB files. Its `config/paths.local.yaml` already points to the correct paths. Run `refresh_all_data.bat` to update data for both projects simultaneously.
 
 ## Git Conventions
 
