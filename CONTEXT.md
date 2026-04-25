@@ -68,7 +68,7 @@ A Python-based static HTML report generator. Run `generate_report.py` before a m
 ## Known Data Gaps
 
 - **38/98 athletes have no GPS data** in the 2025-09-01 to 2026-03-28 window — likely walk-ons, specialists, or players not yet set up in Catapult.
-- **12/98 athletes have no body weight** in `BodyWeightMaster.csv` — name matching or data gaps.
+- **12/98 athletes had no body weight** in `BodyWeightMaster.csv` — fixed by BW fallback (2026-04-25): `_load_fd_bw()` pulls `"Bodyweight in Kilograms"` from ForceDecks `raw_tests` for these athletes. All 12 confirmed to have FD BW data.
 - **98/98 athletes have IMTP data** in the 2025-09-01 to 2026-03-28 window (full coverage as of 2026-03-29).
 - Body weight in CSV is in **pounds** and must be converted to kg (`* 0.453592`).
 - `ForceDecks` also captures `"Bodyweight in Kilograms"` in `raw_tests` — could serve as BW fallback in a future version.
@@ -121,11 +121,29 @@ python src/perch_ingest.py --start 2025-09-01 --end 2026-03-28
 
 ---
 
+## BW Fallback (fully implemented 2026-04-25)
+
+12 of 98 roster athletes had no match in `BodyWeightMaster.csv`, giving them NaN body weight. All 12 have `"Bodyweight in Kilograms"` recorded in ForceDecks `raw_tests`.
+
+**Two private helpers added to `src/data.py`:**
+- `_load_fd_bw(end_date)` — queries `raw_tests` for most recent `"Bodyweight in Kilograms"` per athlete on or before `end_date`. Returns `[forcedecks_id, weight_kg]`. Uses `test_date <= end_date` (no lower bound, matching `load_bodyweight` behavior). Catches all exceptions and returns empty DataFrame.
+- `_load_bw_combined(start_date, end_date)` — coalesces CSV (primary) and FD (fallback). Returns `[name_normalized, weight_kg]`. CSV wins via `combine_first`; FD fills NaN gaps.
+
+**Call sites updated:**
+- `merge_all()` — replaced `load_bodyweight(end_date)` with `_load_bw_combined(start_date, end_date)`. BW domain score now works for all 12 athletes.
+- `load_perch()` and `load_perch_history()` — after CSV BW join, applies FD fallback by `forcedecks_id`, converts kg→lbs, fills NaN `weight_lbs` before 1RM/BW division.
+
+**Tests:** 8 new tests in `tests/test_perch.py`; total suite 34/34 passing.
+
+**Implementation plan:** `docs/superpowers/plans/2026-04-24-bw-fallback.md`
+
+---
+
 ## Known Issues / Future Improvements
 
 1. **Jersey numbers blank** — fill `data/athlete_roster.csv` manually for UI display.
 2. **15 FP-only athletes have no catapult_id** — add when they're set up in GPS system.
-3. **BW fallback** — could use `"Bodyweight in Kilograms"` from ForceDecks `raw_tests` when CSV has no match.
+3. **BW fallback** — Fully implemented (2026-04-25). See `src/data.py`: `_load_fd_bw(end_date)`, `_load_bw_combined(start_date, end_date)`. Wired into `merge_all()`, `load_perch()`, `load_perch_history()`. 34/34 tests passing.
 4. **Trend chart dual y-axes** — CMJ, GPS, and Strength detail charts show all metrics on a single y-axis. Metrics within Strength (N/kg vs N/s) have very different scales; add secondary y-axis in a future pass.
 5. **Athlete comparison panel** — not yet implemented. Deferred.
 6. **Position-specific normalization** — v1 uses full-roster z-scores. Position-specific norms are Phase 2.

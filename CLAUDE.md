@@ -127,7 +127,7 @@ See [CONTEXT.md](CONTEXT.md) for full detail. Key deferred items:
 - **Perch / Weight Room domain** -- Fully implemented (2026-04-24). Run `src/perch_ingest.py --probe` first time to verify API field names, then full ingest. Once `data/perch.duckdb` is populated the Weight Room domain activates automatically.
 - **Dual y-axes in trend detail charts** -- RFD (N/s) and Peak Force/BM (N/kg) share a single y-axis; add secondary axis when Chart.js dual-axis is wired up
 - **Athlete comparison panel** -- side-by-side spider chart overlay
-- **BW fallback** -- use `"Bodyweight in Kilograms"` from ForceDecks `raw_tests` when CSV has no match
+- **BW fallback** -- Fully implemented (2026-04-25). `_load_fd_bw()` and `_load_bw_combined()` in `src/data.py` fill gaps using `"Bodyweight in Kilograms"` from `raw_tests`. CSV wins; FD fills NaN. Wired into `merge_all()`, `load_perch()`, `load_perch_history()`.
 - **Position-specific normalization** -- v1 uses full-roster z-scores
 - **Jersey numbers** -- need manual entry in `data/athlete_roster.csv`
 
