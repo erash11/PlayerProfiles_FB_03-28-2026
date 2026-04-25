@@ -411,18 +411,20 @@ def _load_fd_bw(start_date: str, end_date: str) -> pd.DataFrame:
     """
     try:
         conn = duckdb.connect(str(FORCEPLATE_DB), read_only=True)
-        result = conn.execute("""
-            SELECT athlete_id AS forcedecks_id, metric_value AS weight_kg
-            FROM (
-                SELECT athlete_id, metric_value,
-                       ROW_NUMBER() OVER (PARTITION BY athlete_id ORDER BY test_date DESC) AS rn
-                FROM raw_tests
-                WHERE metric_name = 'Bodyweight in Kilograms'
-                  AND test_date BETWEEN ? AND ?
-            ) t
-            WHERE rn = 1
-        """, [start_date, end_date]).df()
-        conn.close()
+        try:
+            result = conn.execute("""
+                SELECT athlete_id AS forcedecks_id, metric_value AS weight_kg
+                FROM (
+                    SELECT athlete_id, metric_value,
+                           ROW_NUMBER() OVER (PARTITION BY athlete_id ORDER BY test_date DESC) AS rn
+                    FROM raw_tests
+                    WHERE metric_name = 'Bodyweight in Kilograms'
+                      AND test_date BETWEEN ? AND ?
+                ) t
+                WHERE rn = 1
+            """, [start_date, end_date]).df()
+        finally:
+            conn.close()
         return result
     except Exception:
         return pd.DataFrame(columns=["forcedecks_id", "weight_kg"])
