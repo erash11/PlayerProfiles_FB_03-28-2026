@@ -403,6 +403,31 @@ def _load_bw_lbs(end_date: str) -> pd.DataFrame:
     return df[["name_normalized", "weight_lbs"]]
 
 
+def _load_fd_bw(start_date: str, end_date: str) -> pd.DataFrame:
+    """
+    Most recent ForceDecks body weight per athlete within [start_date, end_date].
+    Returns: forcedecks_id, weight_kg (kg — native FD unit).
+    Returns empty DataFrame if DB is unreachable or has no matching rows.
+    """
+    try:
+        conn = duckdb.connect(str(FORCEPLATE_DB), read_only=True)
+        result = conn.execute("""
+            SELECT athlete_id AS forcedecks_id, metric_value AS weight_kg
+            FROM (
+                SELECT athlete_id, metric_value,
+                       ROW_NUMBER() OVER (PARTITION BY athlete_id ORDER BY test_date DESC) AS rn
+                FROM raw_tests
+                WHERE metric_name = 'Bodyweight in Kilograms'
+                  AND test_date BETWEEN ? AND ?
+            ) t
+            WHERE rn = 1
+        """, [start_date, end_date]).df()
+        conn.close()
+        return result
+    except Exception:
+        return pd.DataFrame(columns=["forcedecks_id", "weight_kg"])
+
+
 def load_perch(start_date: str, end_date: str) -> pd.DataFrame:
     """
     Most recent 1RM per exercise per athlete within [start_date, end_date],

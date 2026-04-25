@@ -91,6 +91,35 @@ def _make_bw_csv(tmp_path):
     return p
 
 
+def _make_fd_db(tmp_path, rows):
+    """Helper: create a temp forceplate.db with raw_tests rows."""
+    db = str(tmp_path / "forceplate.db")
+    conn = duckdb.connect(db)
+    conn.execute("""
+        CREATE TABLE raw_tests (
+            test_id VARCHAR NOT NULL,
+            athlete_id VARCHAR NOT NULL,
+            athlete_name VARCHAR,
+            position VARCHAR,
+            position_group VARCHAR,
+            test_date DATE,
+            metric_name VARCHAR NOT NULL,
+            metric_value DOUBLE,
+            metric_unit VARCHAR,
+            pulled_at TIMESTAMP DEFAULT now(),
+            PRIMARY KEY (test_id, metric_name)
+        )
+    """)
+    for row in rows:
+        conn.execute(
+            "INSERT INTO raw_tests VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, now())",
+            [row["test_id"], row["athlete_id"], row.get("athlete_name", ""),
+             None, None, row["test_date"], row["metric_name"], row["metric_value"], "kg"]
+        )
+    conn.close()
+    return db
+
+
 # ── load_perch() tests ────────────────────────────────────────────────────────
 
 def test_load_perch_returns_normalized_ratios(tmp_path):
@@ -182,3 +211,39 @@ def test_load_perch_history_multiple_dates(tmp_path):
     assert len(alice) == 2, f"Expected 2 history rows, got {len(alice)}"
     dates = alice["test_date"].astype(str).str[:10].tolist()
     assert dates == ["2025-09-01", "2025-10-15"]
+
+
+# ── _load_fd_bw() tests ───────────────────────────────────────────────────────
+
+def test_load_fd_bw_returns_most_recent(tmp_path):
+    """_load_fd_bw returns most recent weight per athlete within date range."""
+    db = _make_fd_db(tmp_path, [
+        {"test_id": "t1", "athlete_id": "fd1", "test_date": "2025-09-01",
+         "metric_name": "Bodyweight in Kilograms", "metric_value": 80.0},
+        {"test_id": "t2", "athlete_id": "fd1", "test_date": "2025-10-15",
+         "metric_name": "Bodyweight in Kilograms", "metric_value": 82.0},
+        {"test_id": "t3", "athlete_id": "fd2", "test_date": "2025-09-01",
+         "metric_name": "Bodyweight in Kilograms", "metric_value": 110.0},
+    ])
+    from src.data import _load_fd_bw
+    from unittest.mock import patch
+    with patch("src.data.FORCEPLATE_DB", db):
+        df = _load_fd_bw("2025-09-01", "2026-03-28")
+
+    assert len(df) == 2
+    fd1 = df[df["forcedecks_id"] == "fd1"]
+    assert fd1["weight_kg"].iloc[0] == pytest.approx(82.0)
+    fd2 = df[df["forcedecks_id"] == "fd2"]
+    assert fd2["weight_kg"].iloc[0] == pytest.approx(110.0)
+
+
+def test_load_fd_bw_unreachable_returns_empty():
+    """_load_fd_bw returns empty DataFrame with correct columns if DB is unreachable."""
+    from src.data import _load_fd_bw
+    from unittest.mock import patch
+    with patch("src.data.FORCEPLATE_DB", "/nonexistent/path.db"):
+        df = _load_fd_bw("2025-09-01", "2026-03-28")
+
+    assert df.empty
+    assert "forcedecks_id" in df.columns
+    assert "weight_kg" in df.columns
